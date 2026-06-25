@@ -1,71 +1,76 @@
-#include "../include/blank.h"
-#include <pthread.h>
-#include "lilc/log.h"
 #include <raylib.h>
+#define _POSIX_C_SOURCE 199309L
+#include "../include/blank.h"
+#include "lilc/log.h"
+#include "lilc/numbers.h"
+#include <pthread.h>
+#include <time.h>
 
-static Blank_UiRenderer blank_renderer = {0};
+#include "blank_internal.h"
 
-void blank_begin(const Blank_InitState *state, void (*backend_init_func)(Blank_Backend *backend)) {
-  backend_init_func(&blank_renderer.backend);
-  blank_renderer.backend.window_init_func(&blank_renderer.backend, state);
+inline Blank_Color blank_color_make(u8 red, u8 green, u8 blue, u8 alpha) {
+  return (red << 24) | (green << 16) | (blue << 8) | alpha;
 }
 
-void blank_window_title(Blank_InitState *state, const char *title) {
-  state->title = title;
+inline u8 blank_color_red(Blank_Color color) { return (color >> 24) & 0xFF; }
+
+inline u8 blank_color_green(Blank_Color color) { return (color >> 16) & 0xFF; }
+
+inline u8 blank_color_blue(Blank_Color color) { return (color >> 8) & 0xFF; }
+
+inline u8 blank_color_alpha(Blank_Color color) { return color & 0xFF; }
+
+inline void blank_wait(int miliseconds) {
+  struct timespec ts;
+  ts.tv_sec = 0;
+  ts.tv_nsec = miliseconds * 1000000L;
+  nanosleep(&ts, NULL);
 }
 
-void blank_window_size(Blank_InitState *state, i32 width, i32 height) {
-  state->width = width;
-  state->height = height;
+inline void blank_backend_init(Blank_Backend *backend,
+                                      BackendPrototype proto_backend,
+                                      Blank_BackendInitStage stage) {
+  proto_backend.backend_init_func(backend, stage);
 }
 
-void blank_window_resizeable(Blank_InitState *state) {
-  state->resizeable = true;
-}
+pthread_t render_thread;
 
-static void *blank_render_thread_run(void *args) {
-  while (!WindowShouldClose()) {
-    BeginDrawing();
-    {
-      log_debug("Hii");
-      ClearBackground(RAYWHITE);
-      //blank_screen_clear(blank_color_make(0, 255, 0, 255));
-    }
-    EndDrawing();
-  }
-  return NULL;
-}
+extern void *blank_app_thread_run(void *args);
 
-static void *blank_app_thread_run(void *arg) {
-  void (*app_run_func)(void) = arg;
+extern void *blank_render_thread_run(void *args);
 
-  app_run_func();
-
-  return NULL;
-}
-
-void blank_run(void (*app_run_func)(void)) {
-  pthread_t render_thread;
+void blank_start(Blank_InitState state, BackendInitFunc backend_init_func,
+                 AppRunFunc app_run_func) {
   pthread_t app_thread;
 
-  if (pthread_create(&render_thread, NULL, blank_render_thread_run, NULL)) {
+  BackendPrototype proto_backend = {
+      .init_state = state,
+      .backend_init_func = backend_init_func,
+  };
+
+  struct render_thread_args render_thread_arg = {.backend = proto_backend};
+
+  if (pthread_create(&render_thread, NULL, blank_render_thread_run,
+                     &render_thread_arg)) {
     log_error("[BLANK] Failed to create blank render thread\n");
     return;
   }
 
-  if (pthread_create(&app_thread, NULL, blank_app_thread_run, app_run_func)) {
+  log_info("Render thread created with id: %zu", render_thread);
+
+  struct app_thread_args app_thread_arg = {
+      .backend = proto_backend,
+      .app_run_func = app_run_func,
+  };
+
+  if (pthread_create(&app_thread, NULL, blank_app_thread_run,
+                     &app_thread_arg)) {
     log_error("[BLANK] Failed to create blank app thread\n");
     return;
   }
 
+  log_info("App thread created with id: %zu", app_thread);
+
   pthread_join(app_thread, NULL);
   pthread_join(render_thread, NULL);
-}
-
-void blank_end() {
-
-}
-
-void blank_screen_clear(Blank_Color color) {
-  blank_renderer.backend.clear_screen_func(&blank_renderer.backend, color);
 }

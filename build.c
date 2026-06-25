@@ -2,7 +2,7 @@
 
 #include "gurd.h"
 
-#define COMPILER "gcc"
+#define COMPILER "clang"
 #define STANDARD "c23"
 #define DEBUG true
 #define OUT_NAME "build/blank"
@@ -34,6 +34,8 @@ static void visit_entry(struct file_entry entry) {
   cmd_appendf(&compile_cmd, "-std=%s", STANDARD);
   if (DEBUG) {
     cmd_appendf(&compile_cmd, "-g");
+    cmd_appendf(&compile_cmd, "-O0");
+    cmd_appendf(&compile_cmd, "-fno-omit-frame-pointer");
   }
   // Output location
   cmd_appendf(&compile_cmd, "-o");
@@ -100,8 +102,14 @@ int main(int argc, char **argv) {
   // Run the command
   cmd_execute(&cmd);
 
+  bool debug = args_contains(argc, argv, "-d") != -1;
+
   // Run program
   if (arg_eq(argc, argv, 1, "r")) {
-    systemf("./" OUT_NAME);
+    if (debug) {
+      systemf("gdb ./" OUT_NAME);
+    } else {
+      systemf("./" OUT_NAME);
+    }
   }
 }
