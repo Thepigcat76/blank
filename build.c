@@ -1,6 +1,7 @@
 /* GURD Build Tool - <https://github.com/Thepigcat76/gurd> */
 
 #include "gurd.h"
+#include <stdio.h>
 
 #define COMPILER "clang"
 #define STANDARD "c23"
@@ -34,8 +35,10 @@ static void visit_entry(struct file_entry entry) {
   cmd_appendf(&compile_cmd, "-std=%s", STANDARD);
   if (DEBUG) {
     cmd_appendf(&compile_cmd, "-g");
-    cmd_appendf(&compile_cmd, "-O0");
+    cmd_appendf(&compile_cmd, "-O1");
     cmd_appendf(&compile_cmd, "-fno-omit-frame-pointer");
+    cmd_appendf(&compile_cmd, "-fsanitize=thread");
+    cmd_appendf(&compile_cmd, "-pthread");
   }
   // Output location
   cmd_appendf(&compile_cmd, "-o");
@@ -98,9 +101,16 @@ int main(int argc, char **argv) {
 
   cmd_appendf(&cmd, "-o");
   cmd_appendf(&cmd, OUT_NAME);
+    cmd_appendf(&cmd, "-fsanitize=thread");
+    cmd_appendf(&cmd, "-pthread");
+
+  char s[1024];
+  cmd_sprint(&cmd, s);
 
   // Run the command
   cmd_execute(&cmd);
+  
+  printf("Comamnd: %s\n", s);
 
   bool debug = args_contains(argc, argv, "-d") != -1;
 
@@ -108,6 +118,8 @@ int main(int argc, char **argv) {
   if (arg_eq(argc, argv, 1, "r")) {
     if (debug) {
       systemf("gdb ./" OUT_NAME);
+    } else if (args_contains(argc, argv, "-vg") != -1) {
+      systemf("valgrind --leak-check=full --show-leak-kinds=all --track-origins=yes --errors-for-leak-kinds=all ./%s", OUT_NAME);
     } else {
       systemf("./" OUT_NAME);
     }

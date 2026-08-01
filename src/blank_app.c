@@ -109,3 +109,43 @@ void *blank_app_thread_run(void *args) {
 
   return NULL;
 }
+
+extern void blank_render_button(const Blank_RenderableUiElement *render_elem,
+                                Blank_RenderContext render_ctx);
+
+extern Blank_Size blank_min_size_button(const Blank_UiElement *elem);
+
+void blank_deinit_button(Blank_UiElement *elem) { heap_dealloc(elem->args); }
+
+Blank_UiElement blank_button(const char *text, bool disabled,
+                             OnClickFunc on_click_func) {
+  Blank_UiElemButton ui_elem_btn = {
+      .text = text,
+      .disabled = disabled,
+      .on_click_func = on_click_func,
+  };
+  Blank_UiElement ui_elem = {
+      .elem_type = BLANK_ELEM_BUTTON,
+      .args = heap_alloc(sizeof(Blank_UiElemButton)),
+      .render_func = blank_render_button,
+      .deinit_func = blank_deinit_button,
+      .min_size_func = blank_min_size_button,
+  };
+  memcpy(ui_elem.args, &ui_elem_btn, sizeof(Blank_UiElemButton));
+  return ui_elem;
+}
+
+extern Blank_Size blank_min_size_group(const Blank_UiElement *elem);
+
+void blank_deinit_group(Blank_UiElement *elem) { heap_dealloc(elem->args); }
+
+Blank_UiElement blank_group(Blank_UiElemGroup group) {
+  Blank_UiElement ui_elem = {
+      .elem_type = BLANK_ELEM_GROUP,
+      .args = heap_alloc(sizeof(Blank_UiElemGroup)),
+      .min_size_func = blank_min_size_group,
+      .deinit_func = blank_deinit_group,
+  };
+  memcpy(ui_elem.args, &group, sizeof(Blank_UiElemGroup));
+  return ui_elem;
+}

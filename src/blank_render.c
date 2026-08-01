@@ -2,6 +2,7 @@
 #include "lilc/array.h"
 #include "lilc/assert.h"
 #include "lilc/log.h"
+#include <lilc/alloc.h>
 #include <pthread.h>
 #include <raylib.h>
 
@@ -90,8 +91,8 @@ inline static void blank_render_text(Blank_RenderCommand **cmds,
   render_cmd(cmds, cmd);
 }
 
-static void blank_render_button(const Blank_RenderableUiElement *render_elem,
-                                Blank_RenderContext render_ctx) {
+void blank_render_button(const Blank_RenderableUiElement *render_elem,
+                         Blank_RenderContext render_ctx) {
   ASSERT_RENDER_THREAD()
 
   blank_render_rect(render_ctx.render_commands, render_elem->x, render_elem->y,
@@ -108,7 +109,7 @@ static void blank_render_button(const Blank_RenderableUiElement *render_elem,
                     blank_color_make(0, 0, 0, 255));
 }
 
-static Blank_Size blank_min_size_button(const Blank_UiElement *elem) {
+Blank_Size blank_min_size_button(const Blank_UiElement *elem) {
   ASSERT_RENDER_THREAD();
 
   Blank_UiElemButton *btn = elem->args;
@@ -120,7 +121,7 @@ static Blank_Size blank_min_size_button(const Blank_UiElement *elem) {
   return size;
 }
 
-static Blank_Size blank_min_size_group(const Blank_UiElement *elem) {
+Blank_Size blank_min_size_group(const Blank_UiElement *elem) {
   ASSERT_RENDER_THREAD()
 
   Blank_UiElemGroup *group = elem->args;
@@ -151,14 +152,6 @@ inline static void blank_render_cmds(Blank_Backend *backend,
   backend->render_cmds_func(backend, cmds);
 }
 
-RenderUiElemFunc ui_elem_render_functions[] = {
-    [BLANK_ELEM_BUTTON] = blank_render_button,
-};
-MinUiElemSizeFunc ui_elem_min_size_functions[] = {
-    [BLANK_ELEM_BUTTON] = blank_min_size_button,
-    [BLANK_ELEM_GROUP] = blank_min_size_group,
-};
-
 static void _blank_handle_resize(Blank_Backend *backend, i32 *prev_width,
                                  i32 *prev_height) {
   ASSERT(backend != NULL, "Backend is null");
@@ -175,19 +168,19 @@ static void _blank_handle_resize(Blank_Backend *backend, i32 *prev_width,
 }
 
 static void _blank_rebuild_layout(Blank_Backend *backend,
-                                  Blank_RenderableUiElement *render_elems) {
+                                  Blank_RenderableUiElement **render_elems) {
   ASSERT(backend != NULL, "Backend is null");
   ASSERT_RENDER_THREAD()
 
-  if (render_elems == NULL)
+  if (render_elems == NULL || *render_elems == NULL)
     return;
 
-  array_clear(render_elems);
+  array_clear(*render_elems);
 
   pthread_mutex_lock(&submitted_ui_elems._mutex);
 
   submitted_ui_elems.ui_layout.rearrange_elems_func(
-      &submitted_ui_elems.ui_layout, submitted_ui_elems.ui_elements,
+      &submitted_ui_elems.ui_layout, &submitted_ui_elems.ui_elements,
       render_elems,
       (Blank_LayoutContext){
           .backend = backend,
@@ -211,8 +204,7 @@ static void _blank_render_elems(Blank_Backend *backend,
 
   Blank_RenderableUiElement *render_elem;
   array_foreach(render_elems, render_elem) {
-    RenderUiElemFunc render_elem_func =
-        ui_elem_render_functions[render_elem->elem.elem_type];
+    RenderUiElemFunc render_elem_func = render_elem->elem.render_func;
     Blank_RenderContext render_ctx = {
         .render_commands = render_cmds,
         .backend = backend,
@@ -223,9 +215,13 @@ static void _blank_render_elems(Blank_Backend *backend,
   }
 }
 
+static Rectangle *debug_rects = NULL;
+
 void *blank_render_thread_run(void *args) {
   ASSERT_RENDER_THREAD()
   struct render_thread_args *render_args = args;
+
+  debug_rects = array_new(Rectangle, &HEAP_ALLOCATOR);
 
   Blank_Backend backend = {0};
   blank_backend_init(&backend, render_args->backend,
@@ -236,15 +232,16 @@ void *blank_render_thread_run(void *args) {
   i32 prev_width = blank_screen_width(&backend);
   i32 prev_height = blank_screen_height(&backend);
 
-  static Blank_RenderCommand *render_cmds;
-  render_cmds = array_new_capacity(Blank_RenderCommand, 2, &HEAP_ALLOCATOR);
-  static Blank_RenderableUiElement *render_elems;
-  render_elems =
+  Blank_RenderCommand *render_cmds =
+      array_new_capacity(Blank_RenderCommand, 2, &HEAP_ALLOCATOR);
+  Blank_RenderableUiElement *render_elems =
       array_new_capacity(Blank_RenderableUiElement, 2, &HEAP_ALLOCATOR);
 
   log_debug("Arr ptr: %p, ptr ptr: %p", render_cmds, &render_cmds);
 
   log_debug("cmds: %zu", ((_InternalArrayHeader *)render_cmds - 1)->item_size);
+
+  bool rebuild_layout = false;
 
   while (!blank_window_should_close(&backend)) {
     array_clear(render_cmds);
@@ -253,18 +250,32 @@ void *blank_render_thread_run(void *args) {
 
     blank_clear_screen(&render_cmds, blank_color_make(245, 245, 245, 255));
 
-    if (submitted_ui_elems.rebuild_layout) {
-      _blank_rebuild_layout(&backend, render_elems);
+    pthread_mutex_lock(&submitted_ui_elems._mutex);
+    rebuild_layout = submitted_ui_elems.rebuild_layout;
+    pthread_mutex_unlock(&submitted_ui_elems._mutex);
+
+    if (rebuild_layout) {
+      array_clear(debug_rects);
+      _blank_rebuild_layout(&backend, &render_elems);
     }
 
     if (render_elems != NULL) {
       _blank_render_elems(&backend, render_elems, &render_cmds);
     }
 
+    Rectangle *rect;
+    array_foreach(debug_rects, rect) {
+      blank_render_rect(&render_cmds, rect->x, rect->y, rect->width,
+                        rect->height, blank_color_make(0, 255, 0, 255));
+    }
+
     blank_render_cmds(&backend, render_cmds);
   }
 
   blank_set_window_closed(&app_thread_ui_state);
+
+  array_free(render_cmds);
+  array_free(render_elems);
 
   CloseWindow();
 
@@ -280,7 +291,7 @@ Blank_Size _blank_impl_linear_layout_min_size(const Blank_UiLayout *layout,
 
   Blank_UiElement *elem;
   array_foreach(elems, elem) {
-    Blank_Size size = ui_elem_min_size_functions[elem->elem_type](elem);
+    Blank_Size size = elem->min_size_func(elem);
     if (orientation == BLANK_HORIZONTAL) {
       width += size.width;
       height = max(height, size.height);
@@ -297,13 +308,13 @@ Blank_Size _blank_impl_linear_layout_min_size(const Blank_UiLayout *layout,
 }
 
 void _blank_impl_linear_layout_rearrange_elems(
-    const Blank_UiLayout *layout, Blank_UiElement *elems,
-    Blank_RenderableUiElement *renderable_elems, Blank_LayoutContext context) {
+    const Blank_UiLayout *layout, Blank_UiElement **elems,
+    Blank_RenderableUiElement **renderable_elems, Blank_LayoutContext context) {
   ASSERT_RENDER_THREAD()
-  if (elems == NULL)
+  if (elems == NULL || *elems == NULL)
     return;
 
-  size_t render_elems_amount = array_len(elems);
+  size_t render_elems_amount = array_len(*elems);
 
   if (render_elems_amount == 0)
     return;
@@ -312,6 +323,9 @@ void _blank_impl_linear_layout_rearrange_elems(
     context.container_width = 1;
   if (context.container_height <= 0)
     context.container_height = 1;
+
+  log_debug("Linear layout w: %d, h: %d", context.container_width,
+            context.container_height);
 
   Blank_LayoutOrientation orientation = layout->layout_data.linear.orientation;
 
@@ -330,12 +344,16 @@ void _blank_impl_linear_layout_rearrange_elems(
   f32 min_width_share = 0;
   f32 min_height_share = 0;
 
-  Blank_Size min_layout_size = layout->min_size_func(layout, elems);
+  Blank_Size min_layout_size = layout->min_size_func(layout, *elems);
+
+  f32 padding_share =
+      (f32)(layout->layout_data.linear.padding * (render_elems_amount - 1)) /
+      (orientation == BLANK_HORIZONTAL ? context.container_width
+                                       : context.container_height);
 
   Blank_UiElement *elem;
-  array_foreach(elems, elem) {
-    MinUiElemSizeFunc min_elem_size_func =
-        ui_elem_min_size_functions[elem->elem_type];
+  array_foreach(*elems, elem) {
+    MinUiElemSizeFunc min_elem_size_func = elem->min_size_func;
     Blank_Size min_size = min_elem_size_func(elem);
 
     f32 width_share = min(1.0f, (f32)min_size.width / context.container_width);
@@ -349,6 +367,14 @@ void _blank_impl_linear_layout_rearrange_elems(
               "of container height: %d",
               elem->elem_type, min_size.width, min_size.height, height_share,
               context.container_height);
+  }
+
+  log_debug("Min width share: %f", min_width_share);
+
+  if (orientation == BLANK_HORIZONTAL) {
+    min_width_share += padding_share;
+  } else {
+    min_height_share += padding_share;
   }
 
   // if (orientation == BLANK_HORIZONTAL) {
@@ -372,9 +398,8 @@ void _blank_impl_linear_layout_rearrange_elems(
   i32 x_offset = context.container_x;
   i32 y_offset = context.container_y;
 
-  array_foreach(elems, elem) {
-    MinUiElemSizeFunc min_elem_size_func =
-        ui_elem_min_size_functions[elem->elem_type];
+  array_foreach(*elems, elem) {
+    MinUiElemSizeFunc min_elem_size_func = elem->min_size_func;
     Blank_Size min_size = min_elem_size_func(elem);
 
     log_debug("! - Elem scaled width: %d",
@@ -407,22 +432,27 @@ void _blank_impl_linear_layout_rearrange_elems(
       if (height_share <= 0.0001f)
         height_share = 1.0f;
 
-      log_debug("Height share: %f", height_share);
+      log_debug("Height share: %f, min share: %f", height_share,
+                min_height_share);
 
       log_debug("Group rearranging");
       Blank_UiElemGroup *group = render_elem.elem.args;
       group->layout.rearrange_elems_func(
-          &group->layout, group->ui_elems, renderable_elems,
+          &group->layout, &group->ui_elems, renderable_elems,
           (Blank_LayoutContext){
               .backend = context.backend,
               .container_x = x_offset,
               .container_y = y_offset,
-              .container_width = min_size.width / min_width_share,
-              .container_height = min_size.height / min_height_share,
+              .container_width = orientation == BLANK_HORIZONTAL
+                                     ? min_size.width / min_width_share
+                                     : context.container_width,
+              .container_height = orientation == BLANK_VERTICAL
+                                      ? min_size.height / min_height_share
+                                      : context.container_height,
           });
-      log_debug("Container height: %d, min height: %d, height share: %f, "
+      log_debug("Container width: %d, min height: %d, height share: %f, "
                 "scaled width: %d, scaled height: %d",
-                context.container_height, min_size.height, min_height_share,
+                context.container_width, min_size.height, min_height_share,
                 (i32)(min_size.width / width_share),
                 (i32)(min_size.height / min_height_share));
       log_debug("Group end");
@@ -438,6 +468,13 @@ void _blank_impl_linear_layout_rearrange_elems(
                   layout->layout_data.linear.padding;
     }
 
-    array_add(renderable_elems, render_elem);
+    array_add(*renderable_elems, render_elem);
   }
+
+  //array_add(debug_rects, (Rectangle){
+  //                           .x = context.container_x,
+  //                           .y = context.container_y,
+  //                           .width = context.container_width,
+  //                           .height = context.container_height,
+  //                       });
 }

@@ -14,7 +14,3 @@ typedef struct blank_render_ui_elem {
   i32 width;
   i32 height;
 } Blank_RenderableUiElement;
-
-typedef void (*RenderUiElemFunc)(const Blank_RenderableUiElement *elem, Blank_RenderContext render_ctx);
-
-extern RenderUiElemFunc ui_elem_render_functions[];

@@ -25,8 +25,8 @@ typedef enum {
 
 typedef struct blank_ui_layout {
   void (*rearrange_elems_func)(const struct blank_ui_layout *layout,
-                               struct blank_ui_element *elems,
-                               struct blank_render_ui_elem *renderable_elems,
+                               struct blank_ui_element **elems,
+                               struct blank_render_ui_elem **renderable_elems,
                                Blank_LayoutContext context);
   Blank_Size (*min_size_func)(const struct blank_ui_layout *layout,
                               struct blank_ui_element *elems);
@@ -44,8 +44,8 @@ typedef struct blank_ui_layout {
 #define BLANK_LAYOUT_ID_LINEAR 1
 
 void _blank_impl_linear_layout_rearrange_elems(
-    const Blank_UiLayout *layout, struct blank_ui_element *elems,
-    struct blank_render_ui_elem *renderable_elems, Blank_LayoutContext context);
+    const Blank_UiLayout *layout, struct blank_ui_element **elems,
+    struct blank_render_ui_elem **renderable_elems, Blank_LayoutContext context);
 
 Blank_Size _blank_impl_linear_layout_min_size(const Blank_UiLayout *layout,
                                               struct blank_ui_element *elems);
