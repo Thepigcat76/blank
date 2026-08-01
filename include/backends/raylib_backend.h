@@ -5,3 +5,5 @@
 void raylib_backend_set_loglevel(u32 log_level);
 
 void raylib_backend_init(Blank_Backend *backend);
+
+void raylib_backend_deinit(Blank_Backend *backend);

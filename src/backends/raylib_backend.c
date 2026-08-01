@@ -1,7 +1,5 @@
 #include "../../include/blank_backend.h"
-
 #include "raylib.h"
-
 #include <lilc/alloc.h>
 #include <lilc/array.h>
 #include <lilc/log.h>
@@ -19,8 +17,8 @@ typedef struct {
 
   Bump ui_elem_bump;
   Allocator ui_elem_allocator;
-  Bump ui_state_bump;
-  Allocator ui_state_allocator;
+  Bump ui_render_elem_bump;
+  Allocator ui_render_elem_allocator;
 } RaylibBackend;
 
 static inline Color rl_color(Blank_Color color) {
@@ -68,8 +66,9 @@ static void rl_render_cmds(Blank_Backend *backend, Blank_RenderCommand *cmds) {
     } break;
     case BLANK_RENDER_RECTANGLE_COMMAND: {
       struct blank_cmd_render_rectangle cmd_rr = cmd->cmd.cmd_rr;
-      DrawRectangleLinesEx((Rectangle){cmd_rr.x, cmd_rr.y, cmd_rr.width, cmd_rr.height}, 3.0f,
-                    rl_color(cmd_rr.color));
+      DrawRectangleLinesEx(
+          (Rectangle){cmd_rr.x, cmd_rr.y, cmd_rr.width, cmd_rr.height}, 3.0f,
+          rl_color(cmd_rr.color));
     } break;
     }
   }
@@ -82,10 +81,42 @@ static i32 rl_text_width(Blank_Backend *backend, const char *text,
   return MeasureText(text, font_size);
 }
 
-static i32 rl_screen_width(Blank_Backend *backend) { return GetScreenWidth(); }
+static Blank_Size rl_screen_size(Blank_Backend *backend) {
+  return (Blank_Size){
+      .width = GetScreenWidth(),
+      .height = GetScreenHeight(),
+  };
+}
 
-static i32 rl_screen_height(Blank_Backend *backend) {
-  return GetScreenHeight();
+static Blank_Pos rl_mouse_pos(Blank_Backend *backend) {
+  Vector2 pos = GetMousePosition();
+  return (Blank_Pos){
+      .x = pos.x,
+      .y = pos.y,
+  };
+}
+
+static void rl_mouse_button_down(Blank_Backend *backend,
+                                 bool buttons[_amount_mouse_button]) {
+  buttons[BLANK_MOUSE_BUTTON_LEFT] = IsMouseButtonDown(MOUSE_BUTTON_LEFT);
+  buttons[BLANK_MOUSE_BUTTON_MIDDLE] = IsMouseButtonDown(MOUSE_BUTTON_MIDDLE);
+  buttons[BLANK_MOUSE_BUTTON_RIGHT] = IsMouseButtonDown(MOUSE_BUTTON_RIGHT);
+}
+
+static void rl_mouse_button_pressed(Blank_Backend *backend,
+                                    bool buttons[_amount_mouse_button]) {
+  buttons[BLANK_MOUSE_BUTTON_LEFT] = IsMouseButtonPressed(MOUSE_BUTTON_LEFT);
+  buttons[BLANK_MOUSE_BUTTON_MIDDLE] =
+      IsMouseButtonPressed(MOUSE_BUTTON_MIDDLE);
+  buttons[BLANK_MOUSE_BUTTON_RIGHT] = IsMouseButtonPressed(MOUSE_BUTTON_RIGHT);
+}
+
+static void rl_mouse_button_released(Blank_Backend *backend,
+                                     bool buttons[_amount_mouse_button]) {
+  buttons[BLANK_MOUSE_BUTTON_LEFT] = IsMouseButtonReleased(MOUSE_BUTTON_LEFT);
+  buttons[BLANK_MOUSE_BUTTON_MIDDLE] =
+      IsMouseButtonReleased(MOUSE_BUTTON_MIDDLE);
+  buttons[BLANK_MOUSE_BUTTON_RIGHT] = IsMouseButtonReleased(MOUSE_BUTTON_RIGHT);
 }
 
 static bool rl_window_should_close(Blank_Backend *backend) {
@@ -99,19 +130,19 @@ void raylib_backend_set_loglevel(u32 log_level) {
   rl_custom_log_level = true;
 }
 
-void raylib_backend_init(Blank_Backend *backend,
-                         Blank_BackendInitStage init_stage) {
+void raylib_backend_init(Blank_Backend *backend) {
   if (!rl_custom_log_level) {
     SetTraceLogLevel(LOG_NONE);
   }
 
   RaylibBackend _rl_backend = {0};
-  bump_init(&_rl_backend.ui_state_bump, 32000);
+  bump_init(&_rl_backend.ui_elem_bump, 32000);
+  bump_init(&_rl_backend.ui_render_elem_bump, 32000);
 
-  bump_allocator_init(&_rl_backend.ui_state_allocator,
-                      &_rl_backend.ui_state_bump);
   bump_allocator_init(&_rl_backend.ui_elem_allocator,
                       &_rl_backend.ui_elem_bump);
+  bump_allocator_init(&_rl_backend.ui_render_elem_allocator,
+                      &_rl_backend.ui_render_elem_bump);
 
   backend->backend_context = heap_alloc(sizeof(RaylibBackend));
   memcpy(backend->backend_context, &_rl_backend, sizeof(RaylibBackend));
@@ -119,7 +150,8 @@ void raylib_backend_init(Blank_Backend *backend,
   RaylibBackend *rl_backend = backend->backend_context;
 
   backend->ui_elem_allocator = &rl_backend->ui_elem_allocator;
-  backend->ui_state_allocator = &rl_backend->ui_state_allocator;
+  pthread_mutex_init(&backend->ui_elem_alloc_mutex, NULL);
+  backend->ui_render_elem_allocator = &rl_backend->ui_render_elem_allocator;
 
   backend->window_init_func = rl_window_init;
   backend->window_should_close_func = rl_window_should_close;
@@ -127,6 +159,17 @@ void raylib_backend_init(Blank_Backend *backend,
   backend->render_cmds_func = rl_render_cmds;
 
   backend->text_width_func = rl_text_width;
-  backend->screen_width_func = rl_screen_width;
-  backend->screen_height_func = rl_screen_height;
+  backend->screen_size_func = rl_screen_size;
+  backend->mouse_pos_func = rl_mouse_pos;
+
+  backend->mouse_button_down_func = rl_mouse_button_down;
+  backend->mouse_button_pressed_func = rl_mouse_button_pressed;
+  backend->mouse_button_released_func = rl_mouse_button_released;
+}
+
+void raylib_backend_deinit(Blank_Backend *backend) {
+  RaylibBackend *rl_backend = backend->backend_context;
+
+  bump_free(&rl_backend->ui_elem_bump);
+  bump_free(&rl_backend->ui_render_elem_bump);
 }

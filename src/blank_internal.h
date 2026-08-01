@@ -1,6 +1,7 @@
 #pragma once
 
 #include "../include/blank.h"
+#include "../include/blank_backend.h"
 #include <pthread.h>
 
 typedef struct {
@@ -17,6 +18,11 @@ struct blank_ui_state {
 
   Blank_UiElement *elements;
 
+  Blank_UiElement clicked_elem;
+  i32 clicked_button;
+
+  bool building;
+
   bool _window_closed;
   bool _window_resized;
 
@@ -26,20 +32,15 @@ struct blank_ui_state {
 extern SubmittedUiElements submitted_ui_elems;
 
 typedef void (*BackendInitFunc)(Blank_Backend *backend);
+typedef void (*BackendDeinitFunc)(Blank_Backend *backend);
 typedef void (*AppRunFunc)(Blank_UiState *state);
 
-typedef struct {
-  BackendInitFunc backend_init_func;
-  Blank_InitState init_state;
-} BackendPrototype;
-
-void blank_backend_init(Blank_Backend *backend, BackendPrototype proto_backend);
-
 struct render_thread_args {
-  BackendPrototype backend;
+  Blank_Backend backend;
+  Blank_InitState init_state;
 };
 
 struct app_thread_args {
-  BackendPrototype backend;
+  Blank_Backend backend;
   AppRunFunc app_run_func;
 };

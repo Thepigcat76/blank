@@ -24,6 +24,10 @@ void blank_ui_group(Blank_UiElemGroup *group, Blank_UiElement elem);
 
 /* UI-Element creation functions */
 
+Blank_UiElement blank_ui_button(u64 uid, Blank_UiElemButton ui_elem_button);
+
+#define BLANK_BUTTON(uid, ...) blank_ui_button(uid, (Blank_UiElemButton){__VA_ARGS__})
+
 Blank_UiElement blank_button(const char *text, bool disabled,
                              OnClickFunc on_click_func);
 

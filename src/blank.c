@@ -27,11 +27,6 @@ inline void blank_wait(int miliseconds) {
   nanosleep(&ts, NULL);
 }
 
-inline void blank_backend_init(Blank_Backend *backend,
-                                      BackendPrototype proto_backend) {
-  proto_backend.backend_init_func(backend);
-}
-
 pthread_t render_thread;
 
 extern void *blank_app_thread_run(void *args);
@@ -39,15 +34,17 @@ extern void *blank_app_thread_run(void *args);
 extern void *blank_render_thread_run(void *args);
 
 void blank_start(Blank_InitState state, BackendInitFunc backend_init_func,
+                 BackendDeinitFunc backend_deinit_func,
                  AppRunFunc app_run_func) {
   pthread_t app_thread;
 
-  BackendPrototype proto_backend = {
-      .init_state = state,
-      .backend_init_func = backend_init_func,
-  };
+  Blank_Backend backend = {0};
+  backend_init_func(&backend);
 
-  struct render_thread_args render_thread_arg = {.backend = proto_backend};
+  struct render_thread_args render_thread_arg = {
+      .backend = backend,
+      .init_state = state,
+  };
 
   if (pthread_create(&render_thread, NULL, blank_render_thread_run,
                      &render_thread_arg)) {
@@ -58,7 +55,7 @@ void blank_start(Blank_InitState state, BackendInitFunc backend_init_func,
   log_info("Render thread created with id: %zu", render_thread);
 
   struct app_thread_args app_thread_arg = {
-      .backend = proto_backend,
+      .backend = backend,
       .app_run_func = app_run_func,
   };
 
@@ -72,4 +69,6 @@ void blank_start(Blank_InitState state, BackendInitFunc backend_init_func,
 
   pthread_join(app_thread, NULL);
   pthread_join(render_thread, NULL);
+
+  backend_deinit_func(&backend);
 }

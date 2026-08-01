@@ -1,6 +1,6 @@
 #include "../include/blank.h"
-#include "../include/blank_backend.h"
 #include "../include/blank/ui_elems.h"
+#include "../include/blank_backend.h"
 #include "blank_internal.h"
 #include "lilc/array.h"
 #include "lilc/assert.h"
@@ -44,6 +44,10 @@ inline static i32 blank_text_width(Blank_Backend *backend, const char *text,
 inline static void render_cmd(Blank_RenderCommand **cmds,
                               Blank_RenderCommand cmd) {
   _internal_array_add((void **)cmds, &cmd);
+}
+
+inline static Blank_Pos blank_mouse_pos(Blank_Backend *backend) {
+  return backend->mouse_pos_func(backend);
 }
 
 inline static void blank_clear_screen(Blank_RenderCommand **cmds,
@@ -117,7 +121,7 @@ Blank_Size blank_min_size_button(const Blank_UiElement *elem) {
 
   Blank_UiElemButton *btn = elem->args;
   Blank_Size size = {
-      .width = MeasureText(btn->text, 16),
+      .width = MeasureText(btn->text, 16) + 16,
       .height = 16,
   };
 
@@ -134,14 +138,9 @@ Blank_Size blank_min_size_group(const Blank_UiElement *elem) {
   return size;
 }
 
-inline static i32 blank_screen_width(Blank_Backend *backend) {
+inline static Blank_Size blank_screen_size(Blank_Backend *backend) {
   ASSERT_RENDER_THREAD()
-  return backend->screen_width_func(backend);
-}
-
-inline static i32 blank_screen_height(Blank_Backend *backend) {
-  ASSERT_RENDER_THREAD()
-  return backend->screen_height_func(backend);
+  return backend->screen_size_func(backend);
 }
 
 inline static bool blank_window_should_close(Blank_Backend *backend) {
@@ -155,18 +154,16 @@ inline static void blank_render_cmds(Blank_Backend *backend,
   backend->render_cmds_func(backend, cmds);
 }
 
-static void _blank_handle_resize(Blank_Backend *backend, i32 *prev_width,
-                                 i32 *prev_height) {
+static void _blank_handle_resize(Blank_Backend *backend, Blank_Size *size) {
   ASSERT(backend != NULL, "Backend is null");
   ASSERT_RENDER_THREAD()
 
-  i32 new_width = blank_screen_width(backend);
-  i32 new_height = blank_screen_height(backend);
-  if (*prev_width != new_width || *prev_height != new_height) {
+  Blank_Size new_size = blank_screen_size(backend);
+  if (size->width != new_size.width || size->height != new_size.height) {
     blank_set_window_resized(&app_thread_ui_state, true);
     log_info("Set window resized");
-    *prev_width = new_width;
-    *prev_height = new_height;
+    size->width = new_size.width;
+    size->height = new_size.height;
   }
 }
 
@@ -182,13 +179,15 @@ static void _blank_rebuild_layout(Blank_Backend *backend,
 
   pthread_mutex_lock(&submitted_ui_elems._mutex);
 
+  Blank_Size size = blank_screen_size(backend);
+
   submitted_ui_elems.ui_layout.rearrange_elems_func(
       &submitted_ui_elems.ui_layout, &submitted_ui_elems.ui_elements,
       render_elems,
       (Blank_LayoutContext){
           .backend = backend,
-          .container_width = blank_screen_width(backend),
-          .container_height = blank_screen_height(backend),
+          .container_width = size.width,
+          .container_height = size.height,
       });
   submitted_ui_elems.rebuild_layout = false;
 
@@ -197,7 +196,9 @@ static void _blank_rebuild_layout(Blank_Backend *backend,
 
 static void _blank_render_elems(Blank_Backend *backend,
                                 Blank_RenderableUiElement *render_elems,
-                                Blank_RenderCommand **render_cmds) {
+                                Blank_RenderCommand **render_cmds,
+                                Blank_Pos mouse_pos,
+                                Blank_RenderableUiElement **hovered_elem) {
   ASSERT(backend != NULL, "Backend is null");
   ASSERT(render_cmds != NULL, "Render Commands is null");
   ASSERT_RENDER_THREAD()
@@ -212,10 +213,24 @@ static void _blank_render_elems(Blank_Backend *backend,
         .render_commands = render_cmds,
         .backend = backend,
     };
+
+    if (render_elem->x < mouse_pos.x &&
+        render_elem->x + render_elem->width > mouse_pos.x &&
+        render_elem->y < mouse_pos.y &&
+        render_elem->y + render_elem->height > mouse_pos.y && render_elem->elem.elem_kind != BLANK_ELEM_GROUP) {
+      *hovered_elem = render_elem;
+      //log_debug("hovered uid: %zu", render_elem->elem.uid);
+    }
+
     if (render_elem_func != NULL) {
       render_elem_func(render_elem, render_ctx);
     }
   }
+}
+
+static void mouse_button_pressed(Blank_Backend *backend,
+                                 bool buttons[_amount_mouse_button]) {
+  backend->mouse_button_pressed_func(backend, buttons);
 }
 
 static Rectangle *debug_rects = NULL;
@@ -226,13 +241,11 @@ void *blank_render_thread_run(void *args) {
 
   debug_rects = array_new(Rectangle, &HEAP_ALLOCATOR);
 
-  Blank_Backend backend = {0};
-  blank_backend_init(&backend, render_args->backend);
+  Blank_Backend backend = render_args->backend;
 
-  backend.window_init_func(&backend, &render_args->backend.init_state);
+  backend.window_init_func(&backend, &render_args->init_state);
 
-  i32 prev_width = blank_screen_width(&backend);
-  i32 prev_height = blank_screen_height(&backend);
+  Blank_Size prev_size = blank_screen_size(&backend);
 
   Blank_RenderCommand *render_cmds =
       array_new_capacity(Blank_RenderCommand, 2, &HEAP_ALLOCATOR);
@@ -245,10 +258,12 @@ void *blank_render_thread_run(void *args) {
 
   bool rebuild_layout = false;
 
+  Blank_Pos mouse_pos = {0};
+
   while (!blank_window_should_close(&backend)) {
     array_clear(render_cmds);
 
-    _blank_handle_resize(&backend, &prev_width, &prev_height);
+    _blank_handle_resize(&backend, &prev_size);
 
     blank_clear_screen(&render_cmds, blank_color_make(245, 245, 245, 255));
 
@@ -256,14 +271,29 @@ void *blank_render_thread_run(void *args) {
     rebuild_layout = submitted_ui_elems.rebuild_layout;
     pthread_mutex_unlock(&submitted_ui_elems._mutex);
 
+    mouse_pos = blank_mouse_pos(&backend);
+
     if (rebuild_layout) {
       array_clear(debug_rects);
       _blank_rebuild_layout(&backend, &render_elems);
     }
 
+    Blank_RenderableUiElement *hovered_elem = NULL;
     if (render_elems != NULL) {
-      _blank_render_elems(&backend, render_elems, &render_cmds);
+      _blank_render_elems(&backend, render_elems, &render_cmds, mouse_pos,
+                          &hovered_elem);
     }
+
+    bool buttons[_amount_mouse_button] = {0};
+    mouse_button_pressed(&backend, buttons);
+
+    pthread_mutex_lock(&app_thread_ui_state._mutex);
+    if (hovered_elem != NULL && buttons[BLANK_MOUSE_BUTTON_LEFT] && app_thread_ui_state.clicked_button == -1) {
+      app_thread_ui_state.clicked_elem = hovered_elem->elem;
+      app_thread_ui_state.clicked_button = BLANK_MOUSE_BUTTON_LEFT;
+    }
+
+    pthread_mutex_unlock(&app_thread_ui_state._mutex);
 
     Rectangle *rect;
     array_foreach(debug_rects, rect) {
@@ -284,8 +314,9 @@ void *blank_render_thread_run(void *args) {
   return NULL;
 }
 
-Blank_Size _blank_impl_linear_layout_min_size_elems(const Blank_UiLayout *layout,
-                                              Blank_UiElement *elems) {
+Blank_Size
+_blank_impl_linear_layout_min_size_elems(const Blank_UiLayout *layout,
+                                         Blank_UiElement *elems) {
   ASSERT_RENDER_THREAD()
   Blank_LayoutOrientation orientation = layout->layout_data.linear.orientation;
   i32 width = 0;
@@ -393,7 +424,7 @@ void _blank_impl_linear_layout_rearrange_elems(
     render_elem.x = x_offset;
     render_elem.y = y_offset;
 
-    if (render_elem.elem.elem_type == BLANK_ELEM_GROUP) {
+    if (render_elem.elem.elem_kind == BLANK_ELEM_GROUP) {
       log_debug("Group rearranging");
 
       Blank_UiElemGroup *group = render_elem.elem.args;

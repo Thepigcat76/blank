@@ -5,9 +5,14 @@
 #include "lilc/log.h"
 
 #include "blank_internal.h"
+#include <lilc/alloc.h>
+#include <lilc/panic.h>
 #include <pthread.h>
 
-Blank_UiState app_thread_ui_state = {._mutex = PTHREAD_MUTEX_INITIALIZER};
+Blank_UiState app_thread_ui_state = {
+    ._mutex = PTHREAD_MUTEX_INITIALIZER,
+    .clicked_button = -1,
+};
 
 void blank_window_title(Blank_InitState *state, const char *title) {
   state->title = title;
@@ -47,9 +52,12 @@ void blank_ui_begin(Blank_UiState *state, Blank_UiLayout initial_layout) {
   pthread_mutex_lock(&app_thread_ui_state._mutex);
 
   app_thread_ui_state.ui_layout = initial_layout;
+  app_thread_ui_state.building = true;
 }
 
 void blank_ui_end(void) {
+  app_thread_ui_state.building = false;
+
   pthread_mutex_lock(&submitted_ui_elems._mutex);
 
   array_copy(submitted_ui_elems.ui_elements, app_thread_ui_state.elements);
@@ -57,7 +65,7 @@ void blank_ui_end(void) {
 
   Blank_UiElement *elem;
   array_foreach(submitted_ui_elems.ui_elements, elem) {
-    log_debug("Added Elem: %zu", elem->elem_type);
+    log_debug("Added Elem: %zu", elem->elem_kind);
   }
 
   submitted_ui_elems.rebuild_layout = true;
@@ -85,14 +93,14 @@ void blank_ui_submit(Blank_UiElement ui_elem) {
 void *blank_app_thread_run(void *args) {
   struct app_thread_args *app_thread_args = args;
 
-  Blank_Backend backend = {0};
-  blank_backend_init(&backend, app_thread_args->backend);
+  Blank_Backend backend = app_thread_args->backend;
 
   pthread_mutex_lock(&app_thread_ui_state._mutex);
-  app_thread_ui_state = (Blank_UiState){
-      ._backend = &backend,
-      .elements = array_new_capacity(Blank_UiElement, 1024, &HEAP_ALLOCATOR),
-  };
+
+  app_thread_ui_state._backend = &backend,
+  app_thread_ui_state.elements =
+      array_new_capacity(Blank_UiElement, 1024, &HEAP_ALLOCATOR),
+
   pthread_mutex_unlock(&app_thread_ui_state._mutex);
 
   app_thread_args->app_run_func(&app_thread_ui_state);
@@ -107,6 +115,53 @@ extern Blank_Size blank_min_size_button(const Blank_UiElement *elem);
 
 void blank_deinit_button(Blank_UiElement *elem) { heap_dealloc(elem->args); }
 
+Blank_UiElement blank_ui_button(u64 uid, Blank_UiElemButton ui_elem_button) {
+  if (!app_thread_ui_state.building) {
+    panic("Tried constructing a button while not building ui.");
+  }
+
+  if (uid != 0) {
+    log_debug("non-zero uid: %zu", uid);
+  }
+
+  pthread_mutex_lock(&app_thread_ui_state._backend->ui_elem_alloc_mutex);
+  Allocator *ui_elem_alloc = app_thread_ui_state._backend->ui_elem_allocator;
+  Blank_UiElemButton *args =
+      HEAP_ALLOCATOR.alloc(&HEAP_ALLOCATOR, sizeof(Blank_UiElemButton));
+  pthread_mutex_unlock(&app_thread_ui_state._backend->ui_elem_alloc_mutex);
+
+  *args = ui_elem_button;
+
+  Blank_UiElement ui_elem = {
+      .uid = uid,
+      .elem_kind = BLANK_ELEM_BUTTON,
+      .args = args,
+      .render_func = blank_render_button,
+      .deinit_func = blank_deinit_button,
+      .min_size_func = blank_min_size_button,
+  };
+
+  return ui_elem;
+}
+
+bool blank_elem_clicked(Blank_UiState *state, Blank_MouseButton mouse_button,
+                        u64 *clicked_elem_uid) {
+  pthread_mutex_lock(&app_thread_ui_state._mutex);
+  Blank_MouseButton btn = app_thread_ui_state.clicked_button;
+
+  if (app_thread_ui_state.clicked_button != -1) {
+    log_debug("Button: %d", app_thread_ui_state.clicked_button);
+  }
+
+  app_thread_ui_state.clicked_button = -1;
+
+  *clicked_elem_uid = app_thread_ui_state.clicked_elem.uid;
+
+  pthread_mutex_unlock(&app_thread_ui_state._mutex);
+
+  return btn != -1 && btn == mouse_button;
+}
+
 Blank_UiElement blank_button(const char *text, bool disabled,
                              OnClickFunc on_click_func) {
   Blank_UiElemButton ui_elem_btn = {
@@ -115,7 +170,7 @@ Blank_UiElement blank_button(const char *text, bool disabled,
       .on_click_func = on_click_func,
   };
   Blank_UiElement ui_elem = {
-      .elem_type = BLANK_ELEM_BUTTON,
+      .elem_kind = BLANK_ELEM_BUTTON,
       .args = heap_alloc(sizeof(Blank_UiElemButton)),
       .render_func = blank_render_button,
       .deinit_func = blank_deinit_button,
@@ -131,7 +186,7 @@ void blank_deinit_group(Blank_UiElement *elem) { heap_dealloc(elem->args); }
 
 Blank_UiElement blank_group(Blank_UiElemGroup group) {
   Blank_UiElement ui_elem = {
-      .elem_type = BLANK_ELEM_GROUP,
+      .elem_kind = BLANK_ELEM_GROUP,
       .args = heap_alloc(sizeof(Blank_UiElemGroup)),
       .min_size_func = blank_min_size_group,
       .deinit_func = blank_deinit_group,

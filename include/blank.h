@@ -13,7 +13,14 @@ typedef enum {
   BLANK_MOUSE_BUTTON_LEFT,
   BLANK_MOUSE_BUTTON_MIDDLE,
   BLANK_MOUSE_BUTTON_RIGHT,
+
+  _amount_mouse_button,
 } Blank_MouseButton;
+
+typedef struct {
+  i32 x;
+  i32 y;
+} Blank_Pos;
 
 typedef struct {
   i32 width;
@@ -22,7 +29,8 @@ typedef struct {
 
 struct blank_ui_elem;
 
-typedef void (*OnClickFunc)(struct blank_ui_elem *elem, Blank_MouseButton mouse_button);
+typedef void (*OnClickFunc)(struct blank_ui_elem *elem,
+                            Blank_MouseButton mouse_button);
 
 typedef u32 Blank_Color;
 
@@ -87,7 +95,10 @@ typedef void (*RenderUiElemFunc)(const struct blank_render_ui_elem *elem,
 typedef void (*DeinitUiElemFunc)(struct blank_ui_elem *elem);
 
 typedef struct blank_ui_elem {
-  size_t elem_type;
+  // Unique identifier that can be used to identify and group elements
+  u64 uid;
+
+  size_t elem_kind;
   void *args;
 
   MinUiElemSizeFunc min_size_func;
@@ -126,8 +137,8 @@ typedef void (*LayoutRearrangeElemsFunc)(
     const struct blank_ui_layout *layout, Blank_UiElement **elems,
     Blank_RenderableUiElement **renderable_elems, Blank_LayoutContext context);
 
-typedef Blank_Size (*LayoutMinSizeElemsFunc)(const struct blank_ui_layout *layout,
-                                       Blank_UiElement *elems);
+typedef Blank_Size (*LayoutMinSizeElemsFunc)(
+    const struct blank_ui_layout *layout, Blank_UiElement *elems);
 
 typedef struct blank_ui_layout {
   LayoutRearrangeElemsFunc rearrange_elems_func;
@@ -163,6 +174,7 @@ typedef struct blank_ui_state Blank_UiState;
 // Starts the app and render thread based on a given initialization state.
 void blank_start(Blank_InitState state,
                  void (*backend_init_func)(Blank_Backend *backend),
+                 void (*backend_deinit_func)(Blank_Backend *backend),
                  void (*app_run_func)(struct blank_ui_state *state));
 
 /* Initialization-State config functions */
@@ -178,6 +190,9 @@ void blank_window_resizeable(Blank_InitState *init_state);
 bool blank_window_closed(Blank_UiState *state);
 
 bool blank_window_resized(Blank_UiState *state);
+
+bool blank_elem_clicked(Blank_UiState *state, Blank_MouseButton mouse_button,
+                        u64 *clicked_elem_uid);
 
 /* UI-Building functions */
 
