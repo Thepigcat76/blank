@@ -1,3 +1,6 @@
+#include "../include/blank.h"
+#include "../include/blank_backend.h"
+#include "../include/blank/ui_elems.h"
 #include "blank_internal.h"
 #include "lilc/array.h"
 #include "lilc/assert.h"
@@ -126,7 +129,7 @@ Blank_Size blank_min_size_group(const Blank_UiElement *elem) {
 
   Blank_UiElemGroup *group = elem->args;
   Blank_Size size =
-      group->layout.min_size_func(&group->layout, group->ui_elems);
+      group->layout.min_size_elems_func(&group->layout, group->ui_elems);
 
   return size;
 }
@@ -224,8 +227,7 @@ void *blank_render_thread_run(void *args) {
   debug_rects = array_new(Rectangle, &HEAP_ALLOCATOR);
 
   Blank_Backend backend = {0};
-  blank_backend_init(&backend, render_args->backend,
-                     BACKEND_INIT_RENDER_THREAD);
+  blank_backend_init(&backend, render_args->backend);
 
   backend.window_init_func(&backend, &render_args->backend.init_state);
 
@@ -282,7 +284,7 @@ void *blank_render_thread_run(void *args) {
   return NULL;
 }
 
-Blank_Size _blank_impl_linear_layout_min_size(const Blank_UiLayout *layout,
+Blank_Size _blank_impl_linear_layout_min_size_elems(const Blank_UiLayout *layout,
                                               Blank_UiElement *elems) {
   ASSERT_RENDER_THREAD()
   Blank_LayoutOrientation orientation = layout->layout_data.linear.orientation;
@@ -334,7 +336,7 @@ void _blank_impl_linear_layout_rearrange_elems(
             context.container_x, context.container_width);
 
   // Calculate minimum layout size for given elements, remainders...
-  Blank_Size layout_min_size = layout->min_size_func(layout, *elems);
+  Blank_Size layout_min_size = layout->min_size_elems_func(layout, *elems);
 
   u32 padding = layout->layout_data.linear.padding;
   u32 total_padding = (padding * (elems_amount - 1));

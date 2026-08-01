@@ -1,7 +1,9 @@
+#include "../include/backends/raylib_backend.h"
 #include "../include/blank.h"
+#include "../include/blank/ui_elems.h"
+#include "../include/blank/ui_layouts.h"
 #include "lilc/log.h"
 #include <pthread.h>
-#include <unistd.h>
 
 #define FONT_SIZE 16
 
@@ -10,8 +12,10 @@ typedef struct {
 } AppState;
 
 static void app_ui_rebuild(AppState *app, Blank_UiState *state) {
-  blank_ui_begin(state, BLANK_LINEAR_LAYOUT(
-                            {.padding = 10, .orientation = BLANK_HORIZONTAL}));
+  blank_ui_begin(state, BLANK_LINEAR_LAYOUT({
+                            .padding = 10,
+                            .orientation = BLANK_HORIZONTAL,
+                        }));
 
   blank_ui_submit(blank_button("First Button", false, NULL));
 
@@ -55,8 +59,10 @@ static void app_ui_rebuild(AppState *app, Blank_UiState *state) {
       }),
   };
 
-  blank_ui_group(&fourth_group, blank_button("inner 2x tz Button", false, NULL));
-  blank_ui_group(&fourth_group, blank_button("inner 2x zt Button", false, NULL));
+  blank_ui_group(&fourth_group,
+                 blank_button("inner 2x tz Button", false, NULL));
+  blank_ui_group(&fourth_group,
+                 blank_button("inner 2x zt Button", false, NULL));
 
   blank_ui_group(&third_group, blank_group(fourth_group));
 
@@ -87,9 +93,6 @@ static void app_run(Blank_UiState *state) {
     blank_wait(1000);
   }
 }
-
-extern void raylib_backend_init(Blank_Backend *backend,
-                                Blank_BackendInitStage stage);
 
 int main(void) {
   log_info("Started blank debug process");

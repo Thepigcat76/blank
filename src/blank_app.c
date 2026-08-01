@@ -1,4 +1,6 @@
 #include "../include/blank.h"
+#include "../include/blank/ui_elems.h"
+#include "../include/blank_backend.h"
 #include "lilc/array.h"
 #include "lilc/log.h"
 
@@ -35,12 +37,6 @@ inline bool blank_window_resized(Blank_UiState *state) {
 }
 
 void blank_ui_begin(Blank_UiState *state, Blank_UiLayout initial_layout) {
-  // if (_internal_current_ui_state != NULL) {
-  //   log_error(
-  //       "[BLANK] Cannot begin submitting a ui, last one was not submitted");
-  //   exit(1);
-  // }
-
   pthread_mutex_lock(&submitted_ui_elems._mutex);
   if (submitted_ui_elems.ui_elements == NULL) {
     submitted_ui_elems.ui_elements =
@@ -54,11 +50,6 @@ void blank_ui_begin(Blank_UiState *state, Blank_UiLayout initial_layout) {
 }
 
 void blank_ui_end(void) {
-  // if (_internal_current_ui_state == NULL) {
-  //   log_error("[BLANK] Cannot submit ui, no ui submission was started");
-  //   exit(1);
-  // }
-
   pthread_mutex_lock(&submitted_ui_elems._mutex);
 
   array_copy(submitted_ui_elems.ui_elements, app_thread_ui_state.elements);
@@ -95,8 +86,7 @@ void *blank_app_thread_run(void *args) {
   struct app_thread_args *app_thread_args = args;
 
   Blank_Backend backend = {0};
-  blank_backend_init(&backend, app_thread_args->backend,
-                     BACKEND_INIT_APP_THREAD);
+  blank_backend_init(&backend, app_thread_args->backend);
 
   pthread_mutex_lock(&app_thread_ui_state._mutex);
   app_thread_ui_state = (Blank_UiState){

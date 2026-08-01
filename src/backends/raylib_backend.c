@@ -1,4 +1,4 @@
-#include "../../include/internal/blank_backend.h"
+#include "../../include/blank_backend.h"
 
 #include "raylib.h"
 

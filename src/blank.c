@@ -28,9 +28,8 @@ inline void blank_wait(int miliseconds) {
 }
 
 inline void blank_backend_init(Blank_Backend *backend,
-                                      BackendPrototype proto_backend,
-                                      Blank_BackendInitStage stage) {
-  proto_backend.backend_init_func(backend, stage);
+                                      BackendPrototype proto_backend) {
+  proto_backend.backend_init_func(backend);
 }
 
 pthread_t render_thread;
