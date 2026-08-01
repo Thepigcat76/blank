@@ -314,9 +314,9 @@ void _blank_impl_linear_layout_rearrange_elems(
   if (elems == NULL || *elems == NULL)
     return;
 
-  size_t render_elems_amount = array_len(*elems);
+  size_t elems_amount = array_len(*elems);
 
-  if (render_elems_amount == 0)
+  if (elems_amount == 0)
     return;
 
   if (context.container_width <= 0)
@@ -329,113 +329,71 @@ void _blank_impl_linear_layout_rearrange_elems(
 
   Blank_LayoutOrientation orientation = layout->layout_data.linear.orientation;
 
-  log_debug("orientation: %d, container-x: %d, container-width: %d",
-            orientation, context.container_x, context.container_width);
+  log_debug("orientation: %s, container-x: %d, container-width: %d",
+            orientation == BLANK_VERTICAL ? "vertical" : "horizontal",
+            context.container_x, context.container_width);
 
-  i32 max_elem_height = context.container_height;
-  if (orientation == BLANK_VERTICAL) {
-    max_elem_height /= render_elems_amount;
-  }
-  i32 max_elem_width = context.container_width;
+  // Calculate minimum layout size for given elements, remainders...
+  Blank_Size layout_min_size = layout->min_size_func(layout, *elems);
+
+  u32 padding = layout->layout_data.linear.padding;
+  u32 total_padding = (padding * (elems_amount - 1));
+
+  i32 rem_width = context.container_width - layout_min_size.width;
   if (orientation == BLANK_HORIZONTAL) {
-    max_elem_width /= render_elems_amount;
+    rem_width -= total_padding;
+  }
+  i32 rem_height = context.container_height - layout_min_size.height;
+  if (orientation == BLANK_VERTICAL) {
+    rem_height -= total_padding;
   }
 
-  f32 min_width_share = 0;
-  f32 min_height_share = 0;
+  if (rem_width < 0)
+    rem_width = 0;
+  if (rem_height < 0)
+    rem_height = 0;
 
-  Blank_Size min_layout_size = layout->min_size_func(layout, *elems);
+  log_debug("Remainder: width %d, height %d", rem_width, rem_height);
 
-  f32 padding_share =
-      (f32)(layout->layout_data.linear.padding * (render_elems_amount - 1)) /
-      (orientation == BLANK_HORIZONTAL ? context.container_width
-                                       : context.container_height);
+  i32 unsplit_rem_width = rem_width % elems_amount;
+  i32 unsplit_rem_height = rem_height % elems_amount;
 
+  i32 extra_width = (rem_width - unsplit_rem_width) / elems_amount;
+  i32 extra_height = (rem_height - unsplit_rem_height) / elems_amount;
+
+  i32 x_offset = context.container_x;
+  i32 y_offset = context.container_y;
+
+  // Scale every element by the calculated amount
   Blank_UiElement *elem;
   array_foreach(*elems, elem) {
     MinUiElemSizeFunc min_elem_size_func = elem->min_size_func;
     Blank_Size min_size = min_elem_size_func(elem);
 
-    f32 width_share = min(1.0f, (f32)min_size.width / context.container_width);
-    f32 height_share =
-        min(1.0f, (f32)min_size.height / context.container_height);
-
-    min_width_share += width_share;
-    min_height_share += height_share;
-
-    log_debug("Elem: %zu, Min size - width: %d, height: %d - height share: %f "
-              "of container height: %d",
-              elem->elem_type, min_size.width, min_size.height, height_share,
-              context.container_height);
-  }
-
-  log_debug("Min width share: %f", min_width_share);
-
-  if (orientation == BLANK_HORIZONTAL) {
-    min_width_share += padding_share;
-  } else {
-    min_height_share += padding_share;
-  }
-
-  // if (orientation == BLANK_HORIZONTAL) {
-  //   if (min_width_share < 1.0f) {
-  //     f32 unused_width_share = 1.0f - min_width_share;
-  //
-  //    log_debug("Used width share: %f, Unused width share: %f, Base width: %d,
-  //    "
-  //              "Scaled width: %d, Container width: %d",
-  //              min_width_share, unused_width_share, min_layout_size.width,
-  //              (i32)(min_layout_size.width / min_width_share),
-  //              context.container_width);
-  //  }
-  //}
-
-  if (min_width_share <= 0.0001f)
-    min_width_share = 1.0f;
-  if (min_height_share <= 0.0001f)
-    min_height_share = 1.0f;
-
-  i32 x_offset = context.container_x;
-  i32 y_offset = context.container_y;
-
-  array_foreach(*elems, elem) {
-    MinUiElemSizeFunc min_elem_size_func = elem->min_size_func;
-    Blank_Size min_size = min_elem_size_func(elem);
-
-    log_debug("! - Elem scaled width: %d",
-              (i32)(min_size.width / min_width_share));
-
-    f32 width_share = min(1.0f, (f32)min_size.width / context.container_width);
-    f32 height_share =
-        min(1.0f, (f32)min_size.height / context.container_height);
-
     Blank_RenderableUiElement render_elem = {
         .elem = *elem,
-        .width = min_size.width / min_width_share,
-        .height = min_size.height / min_height_share,
+        .width = min_size.width + extra_width,
+        .height = min_size.height + extra_height,
     };
 
     if (orientation == BLANK_HORIZONTAL) {
+      render_elem.width += unsplit_rem_width > 0 ? 1 : 0;
+      unsplit_rem_width -= 1;
       render_elem.height = max(render_elem.height, context.container_height);
     }
 
     if (orientation == BLANK_VERTICAL) {
       render_elem.width = max(render_elem.width, context.container_width);
+      render_elem.height += unsplit_rem_height > 0 ? 1 : 0;
+      unsplit_rem_height -= 1;
     }
 
     render_elem.x = x_offset;
     render_elem.y = y_offset;
 
     if (render_elem.elem.elem_type == BLANK_ELEM_GROUP) {
-      if (width_share <= 0.0001f)
-        width_share = 1.0f;
-      if (height_share <= 0.0001f)
-        height_share = 1.0f;
-
-      log_debug("Height share: %f, min share: %f", height_share,
-                min_height_share);
-
       log_debug("Group rearranging");
+
       Blank_UiElemGroup *group = render_elem.elem.args;
       group->layout.rearrange_elems_func(
           &group->layout, &group->ui_elems, renderable_elems,
@@ -443,38 +401,20 @@ void _blank_impl_linear_layout_rearrange_elems(
               .backend = context.backend,
               .container_x = x_offset,
               .container_y = y_offset,
-              .container_width = orientation == BLANK_HORIZONTAL
-                                     ? min_size.width / min_width_share
-                                     : context.container_width,
-              .container_height = orientation == BLANK_VERTICAL
-                                      ? min_size.height / min_height_share
-                                      : context.container_height,
+              .container_width = render_elem.width,
+              .container_height = render_elem.height,
           });
-      log_debug("Container width: %d, min height: %d, height share: %f, "
-                "scaled width: %d, scaled height: %d",
-                context.container_width, min_size.height, min_height_share,
-                (i32)(min_size.width / width_share),
-                (i32)(min_size.height / min_height_share));
       log_debug("Group end");
     }
 
     if (orientation == BLANK_HORIZONTAL) {
-      x_offset +=
-          min_size.width / min_width_share + layout->layout_data.linear.padding;
+      x_offset += render_elem.width + layout->layout_data.linear.padding;
     }
 
     if (orientation == BLANK_VERTICAL) {
-      y_offset += min_size.height / min_height_share +
-                  layout->layout_data.linear.padding;
+      y_offset += render_elem.height + layout->layout_data.linear.padding;
     }
 
     array_add(*renderable_elems, render_elem);
   }
-
-  //array_add(debug_rects, (Rectangle){
-  //                           .x = context.container_x,
-  //                           .y = context.container_y,
-  //                           .width = context.container_width,
-  //                           .height = context.container_height,
-  //                       });
 }

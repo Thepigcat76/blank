@@ -29,4 +29,4 @@ u8 blank_color_blue(Blank_Color color);
 
 u8 blank_color_alpha(Blank_Color color);
 
-void blank_wait(int miliseconds);
+void blank_wait(i32 miliseconds);

@@ -64,9 +64,11 @@ static void app_ui_rebuild(AppState *app, Blank_UiState *state) {
 
   blank_ui_group(&example_group, blank_group(sec_group));
 
-  //blank_ui_submit(blank_group(example_group));
+  blank_ui_submit(blank_group(example_group));
 
   blank_ui_submit(blank_button("Second Button", false, NULL));
+
+  blank_ui_submit(blank_button("Third Button", false, NULL));
 
   blank_ui_end();
 }

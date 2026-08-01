@@ -34,7 +34,7 @@ typedef struct blank_ui_layout {
   union {
     void *custom;
     struct {
-      size_t padding;
+      u32 padding;
       Blank_LayoutOrientation orientation;
     } linear;
   } layout_data;

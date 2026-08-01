@@ -68,7 +68,7 @@ static void rl_render_cmds(Blank_Backend *backend, Blank_RenderCommand *cmds) {
     } break;
     case BLANK_RENDER_RECTANGLE_COMMAND: {
       struct blank_cmd_render_rectangle cmd_rr = cmd->cmd.cmd_rr;
-      DrawRectangleLines(cmd_rr.x, cmd_rr.y, cmd_rr.width, cmd_rr.height,
+      DrawRectangleLinesEx((Rectangle){cmd_rr.x, cmd_rr.y, cmd_rr.width, cmd_rr.height}, 3.0f,
                     rl_color(cmd_rr.color));
     } break;
     }
