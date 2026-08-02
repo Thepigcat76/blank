@@ -9,6 +9,8 @@ typedef struct {
   Blank_UiLayout ui_layout;
   bool rebuild_layout;
 
+  Blank_Color bg_color;
+
   pthread_mutex_t _mutex;
 } SubmittedUiElements;
 

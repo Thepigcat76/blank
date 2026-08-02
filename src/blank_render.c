@@ -6,6 +6,7 @@
 #include "lilc/assert.h"
 #include "lilc/log.h"
 #include <lilc/alloc.h>
+#include <lilc/numbers.h>
 #include <pthread.h>
 #include <raylib.h>
 
@@ -61,6 +62,27 @@ inline static void blank_clear_screen(Blank_RenderCommand **cmds,
   render_cmd(cmds, cmd);
 }
 
+static inline void blank_render_image(Blank_RenderCommand **cmds,
+                                      const char *img_path, i32 x, i32 y,
+                                      i32 width, i32 height,
+                                      Blank_Color tint_color) {
+  ASSERT_RENDER_THREAD()
+
+  Blank_RenderCommand cmd = {
+      .cmd_type = BLANK_RENDER_IMAGE_COMMAND,
+      .cmd.cmd_ri =
+          {
+              .img_path = img_path,
+              .x = x,
+              .y = y,
+              .width = width,
+              .height = height,
+              .tint_color = tint_color,
+          },
+  };
+  render_cmd(cmds, cmd);
+}
+
 inline static void blank_render_rect(Blank_RenderCommand **cmds, i32 x, i32 y,
                                      i32 width, i32 height, Blank_Color color) {
   ASSERT_RENDER_THREAD()
@@ -98,25 +120,85 @@ inline static void blank_render_text(Blank_RenderCommand **cmds,
   render_cmd(cmds, cmd);
 }
 
+void blank_render_image_elem(const Blank_RenderableUiElement *render_elem,
+                             Blank_RenderContext render_ctx) {
+  ASSERT_RENDER_THREAD()
+
+  Blank_UiElemImage *img = render_elem->elem.args;
+  Blank_ImageMetadata metadata = {0};
+  bool exists = render_ctx.backend->img_metadata_func(render_ctx.backend,
+                                                      img->img_path, &metadata);
+  if (exists) {
+    i32 img_width = metadata.width * img->scale;
+    i32 img_height = metadata.height * img->scale;
+
+    i32 render_width = render_elem->width;
+    i32 render_height = render_elem->height;
+
+    if (img->keep_ratio) {
+      f32 img_aspect = (f32)img_width / (f32)img_height;
+      f32 rect_aspect = (f32)render_width / (f32)render_height;
+
+      if (img_aspect > rect_aspect) {
+        // image is wider than container — fit to width
+        render_width = render_elem->width;
+        render_height = (i32)(render_elem->width / img_aspect);
+      } else {
+        // image is taller than container — fit to height
+        render_height = render_elem->height;
+        render_width = (i32)(render_elem->height * img_aspect);
+      }
+
+      // center within the render element bounds
+      i32 x_offset = (render_elem->width - render_width) / 2;
+      i32 y_offset = (render_elem->height - render_height) / 2;
+
+      blank_render_image(render_ctx.render_commands, img->img_path,
+                         render_elem->x + x_offset, render_elem->y + y_offset,
+                         render_width, render_height, BLANK_WHITE);
+    } else {
+      blank_render_image(render_ctx.render_commands, img->img_path,
+                         render_elem->x, render_elem->y, render_width,
+                         render_height, BLANK_WHITE);
+    }
+  }
+}
+
+Blank_Size blank_min_size_image_elem(const Blank_UiElement *elem,
+                                     Blank_Context ctx) {
+  Blank_UiElemImage *img = elem->args;
+
+  Blank_ImageMetadata metadata = {0};
+  bool exists =
+      ctx.backend->img_metadata_func(ctx.backend, img->img_path, &metadata);
+  if (exists) {
+    return (Blank_Size){.width = metadata.width * img->scale,
+                        .height = metadata.height * img->scale};
+  }
+  return (Blank_Size){.width = 100, .height = 100};
+}
+
+void blank_deinit_image_elem(Blank_UiElement *elem) {}
+
 void blank_render_button(const Blank_RenderableUiElement *render_elem,
                          Blank_RenderContext render_ctx) {
   ASSERT_RENDER_THREAD()
 
-  blank_render_rect(render_ctx.render_commands, render_elem->x, render_elem->y,
-                    render_elem->width, render_elem->height,
-                    blank_color_make(255, 0, 0, 255));
-
   Blank_UiElemButton *btn = render_elem->elem.args;
+
+  blank_render_rect(render_ctx.render_commands, render_elem->x, render_elem->y,
+                    render_elem->width, render_elem->height, btn->bg_color);
 
   i32 text_width = blank_text_width(render_ctx.backend, btn->text, 16);
 
   blank_render_text(render_ctx.render_commands, btn->text,
                     render_elem->x + (render_elem->width - text_width) / 2,
                     render_elem->y + (render_elem->height - 16) / 2, 16,
-                    blank_color_make(0, 0, 0, 255));
+                    btn->text_color);
 }
 
-Blank_Size blank_min_size_button(const Blank_UiElement *elem) {
+Blank_Size blank_min_size_button(const Blank_UiElement *elem,
+                                 Blank_Context ctx) {
   ASSERT_RENDER_THREAD();
 
   Blank_UiElemButton *btn = elem->args;
@@ -128,12 +210,13 @@ Blank_Size blank_min_size_button(const Blank_UiElement *elem) {
   return size;
 }
 
-Blank_Size blank_min_size_group(const Blank_UiElement *elem) {
+Blank_Size blank_min_size_group(const Blank_UiElement *elem,
+                                Blank_Context ctx) {
   ASSERT_RENDER_THREAD()
 
   Blank_UiElemGroup *group = elem->args;
   Blank_Size size =
-      group->layout.min_size_elems_func(&group->layout, group->ui_elems);
+      group->layout.min_size_elems_func(&group->layout, group->ui_elems, ctx);
 
   return size;
 }
@@ -217,9 +300,10 @@ static void _blank_render_elems(Blank_Backend *backend,
     if (render_elem->x < mouse_pos.x &&
         render_elem->x + render_elem->width > mouse_pos.x &&
         render_elem->y < mouse_pos.y &&
-        render_elem->y + render_elem->height > mouse_pos.y && render_elem->elem.elem_kind != BLANK_ELEM_GROUP) {
+        render_elem->y + render_elem->height > mouse_pos.y &&
+        render_elem->elem.elem_kind != BLANK_ELEM_GROUP) {
       *hovered_elem = render_elem;
-      //log_debug("hovered uid: %zu", render_elem->elem.uid);
+      // log_debug("hovered uid: %zu", render_elem->elem.uid);
     }
 
     if (render_elem_func != NULL) {
@@ -259,17 +343,19 @@ void *blank_render_thread_run(void *args) {
   bool rebuild_layout = false;
 
   Blank_Pos mouse_pos = {0};
+  Blank_Color bg_color = BLANK_WHITE;
 
   while (!blank_window_should_close(&backend)) {
     array_clear(render_cmds);
 
     _blank_handle_resize(&backend, &prev_size);
 
-    blank_clear_screen(&render_cmds, blank_color_make(245, 245, 245, 255));
-
     pthread_mutex_lock(&submitted_ui_elems._mutex);
     rebuild_layout = submitted_ui_elems.rebuild_layout;
+    bg_color = submitted_ui_elems.bg_color;
     pthread_mutex_unlock(&submitted_ui_elems._mutex);
+
+    blank_clear_screen(&render_cmds, bg_color);
 
     mouse_pos = blank_mouse_pos(&backend);
 
@@ -288,9 +374,14 @@ void *blank_render_thread_run(void *args) {
     mouse_button_pressed(&backend, buttons);
 
     pthread_mutex_lock(&app_thread_ui_state._mutex);
-    if (hovered_elem != NULL && buttons[BLANK_MOUSE_BUTTON_LEFT] && app_thread_ui_state.clicked_button == -1) {
+    if (hovered_elem != NULL && app_thread_ui_state.clicked_button == -1) {
       app_thread_ui_state.clicked_elem = hovered_elem->elem;
-      app_thread_ui_state.clicked_button = BLANK_MOUSE_BUTTON_LEFT;
+      if (buttons[BLANK_MOUSE_BUTTON_LEFT])
+        app_thread_ui_state.clicked_button = BLANK_MOUSE_BUTTON_LEFT;
+      else if (buttons[BLANK_MOUSE_BUTTON_RIGHT])
+        app_thread_ui_state.clicked_button = BLANK_MOUSE_BUTTON_RIGHT;
+      else if (buttons[BLANK_MOUSE_BUTTON_MIDDLE])
+        app_thread_ui_state.clicked_button = BLANK_MOUSE_BUTTON_MIDDLE;
     }
 
     pthread_mutex_unlock(&app_thread_ui_state._mutex);
@@ -314,9 +405,8 @@ void *blank_render_thread_run(void *args) {
   return NULL;
 }
 
-Blank_Size
-_blank_impl_linear_layout_min_size_elems(const Blank_UiLayout *layout,
-                                         Blank_UiElement *elems) {
+Blank_Size _blank_impl_linear_layout_min_size_elems(
+    const Blank_UiLayout *layout, Blank_UiElement *elems, Blank_Context ctx) {
   ASSERT_RENDER_THREAD()
   Blank_LayoutOrientation orientation = layout->layout_data.linear.orientation;
   i32 width = 0;
@@ -324,7 +414,7 @@ _blank_impl_linear_layout_min_size_elems(const Blank_UiLayout *layout,
 
   Blank_UiElement *elem;
   array_foreach(elems, elem) {
-    Blank_Size size = elem->min_size_func(elem);
+    Blank_Size size = elem->min_size_func(elem, ctx);
     if (orientation == BLANK_HORIZONTAL) {
       width += size.width;
       height = max(height, size.height);
@@ -357,6 +447,8 @@ void _blank_impl_linear_layout_rearrange_elems(
   if (context.container_height <= 0)
     context.container_height = 1;
 
+  Blank_Context ctx = {.backend = context.backend};
+
   log_debug("Linear layout w: %d, h: %d", context.container_width,
             context.container_height);
 
@@ -367,7 +459,7 @@ void _blank_impl_linear_layout_rearrange_elems(
             context.container_x, context.container_width);
 
   // Calculate minimum layout size for given elements, remainders...
-  Blank_Size layout_min_size = layout->min_size_elems_func(layout, *elems);
+  Blank_Size layout_min_size = layout->min_size_elems_func(layout, *elems, ctx);
 
   u32 padding = layout->layout_data.linear.padding;
   u32 total_padding = (padding * (elems_amount - 1));
@@ -380,11 +472,6 @@ void _blank_impl_linear_layout_rearrange_elems(
   if (orientation == BLANK_VERTICAL) {
     rem_height -= total_padding;
   }
-
-  if (rem_width < 0)
-    rem_width = 0;
-  if (rem_height < 0)
-    rem_height = 0;
 
   log_debug("Remainder: width %d, height %d", rem_width, rem_height);
 
@@ -401,7 +488,7 @@ void _blank_impl_linear_layout_rearrange_elems(
   Blank_UiElement *elem;
   array_foreach(*elems, elem) {
     MinUiElemSizeFunc min_elem_size_func = elem->min_size_func;
-    Blank_Size min_size = min_elem_size_func(elem);
+    Blank_Size min_size = min_elem_size_func(elem, ctx);
 
     Blank_RenderableUiElement render_elem = {
         .elem = *elem,

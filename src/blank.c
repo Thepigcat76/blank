@@ -8,10 +8,6 @@
 
 #include "blank_internal.h"
 
-inline Blank_Color blank_color_make(u8 red, u8 green, u8 blue, u8 alpha) {
-  return (red << 24) | (green << 16) | (blue << 8) | alpha;
-}
-
 inline u8 blank_color_red(Blank_Color color) { return (color >> 24) & 0xFF; }
 
 inline u8 blank_color_green(Blank_Color color) { return (color >> 16) & 0xFF; }

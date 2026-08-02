@@ -41,12 +41,13 @@ inline bool blank_window_resized(Blank_UiState *state) {
   return resized;
 }
 
-void blank_ui_begin(Blank_UiState *state, Blank_UiLayout initial_layout) {
+void blank_ui_begin(Blank_UiState *state, Blank_Color bg_color, Blank_UiLayout initial_layout) {
   pthread_mutex_lock(&submitted_ui_elems._mutex);
   if (submitted_ui_elems.ui_elements == NULL) {
     submitted_ui_elems.ui_elements =
         array_new_capacity(Blank_UiElement, 1024, &HEAP_ALLOCATOR);
   }
+  submitted_ui_elems.bg_color = bg_color;
   pthread_mutex_unlock(&submitted_ui_elems._mutex);
 
   pthread_mutex_lock(&app_thread_ui_state._mutex);
@@ -111,7 +112,8 @@ void *blank_app_thread_run(void *args) {
 extern void blank_render_button(const Blank_RenderableUiElement *render_elem,
                                 Blank_RenderContext render_ctx);
 
-extern Blank_Size blank_min_size_button(const Blank_UiElement *elem);
+extern Blank_Size blank_min_size_button(const Blank_UiElement *elem,
+                                        Blank_Context ctx);
 
 void blank_deinit_button(Blank_UiElement *elem) { heap_dealloc(elem->args); }
 
@@ -130,6 +132,14 @@ Blank_UiElement blank_ui_button(u64 uid, Blank_UiElemButton ui_elem_button) {
       HEAP_ALLOCATOR.alloc(&HEAP_ALLOCATOR, sizeof(Blank_UiElemButton));
   pthread_mutex_unlock(&app_thread_ui_state._backend->ui_elem_alloc_mutex);
 
+  if (ui_elem_button.text_color == 0) {
+    ui_elem_button.text_color = BLANK_BLACK;
+  }
+
+  if (ui_elem_button.bg_color == 0) {
+    ui_elem_button.bg_color = BLANK_RED;
+  }
+
   *args = ui_elem_button;
 
   Blank_UiElement ui_elem = {
@@ -139,6 +149,44 @@ Blank_UiElement blank_ui_button(u64 uid, Blank_UiElemButton ui_elem_button) {
       .render_func = blank_render_button,
       .deinit_func = blank_deinit_button,
       .min_size_func = blank_min_size_button,
+  };
+
+  return ui_elem;
+}
+
+extern void
+blank_render_image_elem(const Blank_RenderableUiElement *render_elem,
+                        Blank_RenderContext render_ctx);
+
+extern Blank_Size blank_min_size_image_elem(const Blank_UiElement *elem,
+                                            Blank_Context ctx);
+
+extern void blank_deinit_image_elem(Blank_UiElement *elem);
+
+Blank_UiElement blank_ui_image(u64 uid, Blank_UiElemImage ui_elem_image) {
+  if (!app_thread_ui_state.building) {
+    panic("Tried constructing a button while not building ui.");
+  }
+
+  if (uid != 0) {
+    log_debug("non-zero uid: %zu", uid);
+  }
+
+  pthread_mutex_lock(&app_thread_ui_state._backend->ui_elem_alloc_mutex);
+  Allocator *ui_elem_alloc = app_thread_ui_state._backend->ui_elem_allocator;
+  Blank_UiElemImage *args =
+      HEAP_ALLOCATOR.alloc(&HEAP_ALLOCATOR, sizeof(Blank_UiElemImage));
+  pthread_mutex_unlock(&app_thread_ui_state._backend->ui_elem_alloc_mutex);
+
+  *args = ui_elem_image;
+
+  Blank_UiElement ui_elem = {
+      .uid = uid,
+      .elem_kind = BLANK_ELEM_IMAGE,
+      .args = args,
+      .render_func = blank_render_image_elem,
+      .deinit_func = blank_deinit_image_elem,
+      .min_size_func = blank_min_size_image_elem,
   };
 
   return ui_elem;
@@ -162,12 +210,10 @@ bool blank_elem_clicked(Blank_UiState *state, Blank_MouseButton mouse_button,
   return btn != -1 && btn == mouse_button;
 }
 
-Blank_UiElement blank_button(const char *text, bool disabled,
-                             OnClickFunc on_click_func) {
+Blank_UiElement blank_button(const char *text, bool disabled) {
   Blank_UiElemButton ui_elem_btn = {
       .text = text,
       .disabled = disabled,
-      .on_click_func = on_click_func,
   };
   Blank_UiElement ui_elem = {
       .elem_kind = BLANK_ELEM_BUTTON,
@@ -180,7 +226,8 @@ Blank_UiElement blank_button(const char *text, bool disabled,
   return ui_elem;
 }
 
-extern Blank_Size blank_min_size_group(const Blank_UiElement *elem);
+extern Blank_Size blank_min_size_group(const Blank_UiElement *elem,
+                                       Blank_Context ctx);
 
 void blank_deinit_group(Blank_UiElement *elem) { heap_dealloc(elem->args); }
 

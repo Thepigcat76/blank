@@ -11,7 +11,7 @@ void _blank_impl_linear_layout_rearrange_elems(
     Blank_RenderableUiElement **renderable_elems, Blank_LayoutContext context);
 
 Blank_Size _blank_impl_linear_layout_min_size_elems(const Blank_UiLayout *layout,
-                                              Blank_UiElement *elems);
+                                              Blank_UiElement *elems, Blank_Context ctx);
 
 #define BLANK_LINEAR_LAYOUT(...)                                               \
   (Blank_UiLayout) {                                                           \

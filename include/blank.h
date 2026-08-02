@@ -34,7 +34,8 @@ typedef void (*OnClickFunc)(struct blank_ui_elem *elem,
 
 typedef u32 Blank_Color;
 
-Blank_Color blank_color_make(u8 red, u8 green, u8 blue, u8 alpha);
+#define blank_color_make(red, green, blue, alpha)                              \
+  (Blank_Color)((red) << 24) | ((green) << 16) | ((blue) << 8) | (alpha)
 
 u8 blank_color_red(Blank_Color color);
 
@@ -44,12 +45,23 @@ u8 blank_color_blue(Blank_Color color);
 
 u8 blank_color_alpha(Blank_Color color);
 
+#define BLANK_WHITE blank_color_make(255, 255, 255, 255)
+
+#define BLANK_COZY_WHITE blank_color_make(239, 232, 222, 255)
+
+#define BLANK_BLACK blank_color_make(0, 0, 0, 255)
+
+#define BLANK_COZY_BLACK blank_color_make(16, 23, 33, 255)
+
+#define BLANK_RED blank_color_make(235, 25, 34, 255)
+
 void blank_wait(i32 miliseconds);
 
 #define BLANK_CLEAR_SCREEN_COMMAND 0
 #define BLANK_RENDER_CUSTOM_COMMAND 1
 #define BLANK_RENDER_TEXT_COMMAND 2
 #define BLANK_RENDER_RECTANGLE_COMMAND 3
+#define BLANK_RENDER_IMAGE_COMMAND 4
 
 struct blank_cmd_clear_screen {
   Blank_Color color;
@@ -73,12 +85,24 @@ struct blank_cmd_render_rectangle {
   i32 height;
 };
 
+struct blank_cmd_render_img {
+  const char *img_path;
+  
+  Blank_Color tint_color;
+  i32 x;
+  i32 y;
+  
+  i32 width;
+  i32 height;
+};
+
 typedef struct blank_render_cmd {
   u32 cmd_type;
   union {
     struct blank_cmd_clear_screen cmd_cs;
     struct blank_cmd_render_rectangle cmd_rr;
     struct blank_cmd_render_text cmd_rt;
+    struct blank_cmd_render_img cmd_ri;
   } cmd;
 } Blank_RenderCommand;
 
@@ -87,7 +111,11 @@ typedef struct {
   Blank_RenderCommand **render_commands;
 } Blank_RenderContext;
 
-typedef Blank_Size (*MinUiElemSizeFunc)(const struct blank_ui_elem *elem);
+typedef struct {
+  Blank_Backend *backend;
+} Blank_Context;
+
+typedef Blank_Size (*MinUiElemSizeFunc)(const struct blank_ui_elem *elem, Blank_Context ctx);
 
 typedef void (*RenderUiElemFunc)(const struct blank_render_ui_elem *elem,
                                  Blank_RenderContext render_ctx);
@@ -138,7 +166,7 @@ typedef void (*LayoutRearrangeElemsFunc)(
     Blank_RenderableUiElement **renderable_elems, Blank_LayoutContext context);
 
 typedef Blank_Size (*LayoutMinSizeElemsFunc)(
-    const struct blank_ui_layout *layout, Blank_UiElement *elems);
+    const struct blank_ui_layout *layout, Blank_UiElement *elems, Blank_Context ctx);
 
 typedef struct blank_ui_layout {
   LayoutRearrangeElemsFunc rearrange_elems_func;
@@ -196,7 +224,7 @@ bool blank_elem_clicked(Blank_UiState *state, Blank_MouseButton mouse_button,
 
 /* UI-Building functions */
 
-void blank_ui_begin(Blank_UiState *state, Blank_UiLayout initial_layout);
+void blank_ui_begin(Blank_UiState *state, Blank_Color bg_color, Blank_UiLayout initial_layout);
 
 void blank_ui_end(void);
 
