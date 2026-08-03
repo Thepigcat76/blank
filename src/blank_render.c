@@ -312,9 +312,9 @@ static void _blank_render_elems(Blank_Backend *backend,
   }
 }
 
-static void mouse_button_pressed(Blank_Backend *backend,
-                                 bool buttons[_amount_mouse_button]) {
-  backend->mouse_button_pressed_func(backend, buttons);
+static void mouse_button_state(Blank_Backend *backend,
+                                 Blank_KeyState buttons[_amount_mouse_button]) {
+  backend->mouse_button_state_func(backend, buttons);
 }
 
 static Rectangle *debug_rects = NULL;
@@ -370,17 +370,17 @@ void *blank_render_thread_run(void *args) {
                           &hovered_elem);
     }
 
-    bool buttons[_amount_mouse_button] = {0};
-    mouse_button_pressed(&backend, buttons);
+    Blank_KeyState buttons[_amount_mouse_button] = {0};
+    mouse_button_state(&backend, buttons);
 
     pthread_mutex_lock(&app_thread_ui_state._mutex);
     if (hovered_elem != NULL && app_thread_ui_state.clicked_button == -1) {
       app_thread_ui_state.clicked_elem = hovered_elem->elem;
-      if (buttons[BLANK_MOUSE_BUTTON_LEFT])
+      if (buttons[BLANK_MOUSE_BUTTON_LEFT] == KEY_STATE_RELEASED)
         app_thread_ui_state.clicked_button = BLANK_MOUSE_BUTTON_LEFT;
-      else if (buttons[BLANK_MOUSE_BUTTON_RIGHT])
+      else if (buttons[BLANK_MOUSE_BUTTON_RIGHT] == KEY_STATE_RELEASED)
         app_thread_ui_state.clicked_button = BLANK_MOUSE_BUTTON_RIGHT;
-      else if (buttons[BLANK_MOUSE_BUTTON_MIDDLE])
+      else if (buttons[BLANK_MOUSE_BUTTON_MIDDLE] == KEY_STATE_RELEASED)
         app_thread_ui_state.clicked_button = BLANK_MOUSE_BUTTON_MIDDLE;
     }
 

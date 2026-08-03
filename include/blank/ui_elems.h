@@ -7,6 +7,7 @@
 #define BLANK_ELEM_BUTTON 0
 #define BLANK_ELEM_GROUP 1
 #define BLANK_ELEM_IMAGE 2
+#define BLANK_ELEM_LABEL 3
 
 typedef struct {
   Blank_UiLayout layout;

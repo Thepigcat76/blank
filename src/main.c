@@ -30,7 +30,7 @@ static void app_ui_rebuild(AppState *app, Blank_UiState *state) {
   blank_ui_group(&header_group, BLANK_BUTTON(RAWR_BUTTON_UID, "First Button",
                                              false, BLANK_WHITE, btn_bg_color));
 
-  blank_ui_group(&header_group, BLANK_BUTTON(0, "Third Button", false,
+  blank_ui_group(&header_group, BLANK_BUTTON(0, app->cur_page == 0 ? "Third Button" : "Other button", false,
                                              BLANK_WHITE, btn_bg_color));
   blank_ui_group(&header_group,
                  BLANK_IMAGE(0, "assets/image.png", true, 0.25f));
@@ -54,8 +54,7 @@ static void app_run(Blank_UiState *state) {
     }
 
     u64 clicked_elem;
-    if (blank_elem_clicked(state, BLANK_MOUSE_BUTTON_RIGHT, &clicked_elem) &&
-        clicked_elem == RAWR_BUTTON_UID) {
+    if (blank_elem_clicked(state, BLANK_MOUSE_BUTTON_RIGHT, &clicked_elem)) {
       log_debug("elem clicked: %zu", clicked_elem);
       app.cur_page = (app.cur_page + 1) % 3;
       app_ui_rebuild(&app, state);

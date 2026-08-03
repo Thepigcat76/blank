@@ -17,6 +17,80 @@ typedef enum {
   _amount_mouse_button,
 } Blank_MouseButton;
 
+typedef enum {
+  BLANK_KEY_NULL,
+  // Letters
+  BLANK_KEY_A, BLANK_KEY_B, BLANK_KEY_C, BLANK_KEY_D, BLANK_KEY_E,
+  BLANK_KEY_F, BLANK_KEY_G, BLANK_KEY_H, BLANK_KEY_I, BLANK_KEY_J,
+  BLANK_KEY_K, BLANK_KEY_L, BLANK_KEY_M, BLANK_KEY_N, BLANK_KEY_O,
+  BLANK_KEY_P, BLANK_KEY_Q, BLANK_KEY_R, BLANK_KEY_S, BLANK_KEY_T,
+  BLANK_KEY_U, BLANK_KEY_V, BLANK_KEY_W, BLANK_KEY_X, BLANK_KEY_Y,
+  BLANK_KEY_Z,
+
+  // Numbers (top row)
+  BLANK_KEY_0, BLANK_KEY_1, BLANK_KEY_2, BLANK_KEY_3, BLANK_KEY_4,
+  BLANK_KEY_5, BLANK_KEY_6, BLANK_KEY_7, BLANK_KEY_8, BLANK_KEY_9,
+
+  // Function keys
+  BLANK_KEY_F1,  BLANK_KEY_F2,  BLANK_KEY_F3,  BLANK_KEY_F4,
+  BLANK_KEY_F5,  BLANK_KEY_F6,  BLANK_KEY_F7,  BLANK_KEY_F8,
+  BLANK_KEY_F9,  BLANK_KEY_F10, BLANK_KEY_F11, BLANK_KEY_F12,
+
+  // Arrow keys
+  BLANK_KEY_UP, BLANK_KEY_DOWN, BLANK_KEY_LEFT, BLANK_KEY_RIGHT,
+
+  // Modifier keys
+  BLANK_KEY_LEFT_SHIFT,  BLANK_KEY_RIGHT_SHIFT,
+  BLANK_KEY_LEFT_CTRL,   BLANK_KEY_RIGHT_CTRL,
+  BLANK_KEY_LEFT_ALT,    BLANK_KEY_RIGHT_ALT,
+  BLANK_KEY_LEFT_SUPER,  BLANK_KEY_RIGHT_SUPER,
+
+  // Control keys
+  BLANK_KEY_ESCAPE,
+  BLANK_KEY_ENTER,
+  BLANK_KEY_TAB,
+  BLANK_KEY_BACKSPACE,
+  BLANK_KEY_DELETE,
+  BLANK_KEY_INSERT,
+  BLANK_KEY_HOME,
+  BLANK_KEY_END,
+  BLANK_KEY_PAGE_UP,
+  BLANK_KEY_PAGE_DOWN,
+  BLANK_KEY_CAPS_LOCK,
+  BLANK_KEY_PRINT_SCREEN,
+  BLANK_KEY_SCROLL_LOCK,
+  BLANK_KEY_PAUSE,
+  BLANK_KEY_SPACE,
+
+  // Punctuation / symbols
+  BLANK_KEY_APOSTROPHE,    // '
+  BLANK_KEY_COMMA,         // ,
+  BLANK_KEY_MINUS,         // -
+  BLANK_KEY_PERIOD,        // .
+  BLANK_KEY_SLASH,         // /
+  BLANK_KEY_SEMICOLON,     // ;
+  BLANK_KEY_EQUAL,         // =
+  BLANK_KEY_LEFT_BRACKET,  // [
+  BLANK_KEY_BACKSLASH,     // '\'
+  BLANK_KEY_RIGHT_BRACKET, // ]
+  BLANK_KEY_GRAVE,         // `
+
+  // Numpad
+  BLANK_KEY_NUM_LOCK,
+  BLANK_KEY_NUMPAD_0, BLANK_KEY_NUMPAD_1, BLANK_KEY_NUMPAD_2,
+  BLANK_KEY_NUMPAD_3, BLANK_KEY_NUMPAD_4, BLANK_KEY_NUMPAD_5,
+  BLANK_KEY_NUMPAD_6, BLANK_KEY_NUMPAD_7, BLANK_KEY_NUMPAD_8,
+  BLANK_KEY_NUMPAD_9,
+  BLANK_KEY_NUMPAD_ADD,
+  BLANK_KEY_NUMPAD_SUBTRACT,
+  BLANK_KEY_NUMPAD_MULTIPLY,
+  BLANK_KEY_NUMPAD_DIVIDE,
+  BLANK_KEY_NUMPAD_DECIMAL,
+  BLANK_KEY_NUMPAD_ENTER,
+
+  _amount_blank_keys,
+} Blank_Key;
+
 typedef struct {
   i32 x;
   i32 y;
@@ -27,12 +101,17 @@ typedef struct {
   i32 height;
 } Blank_Size;
 
-struct blank_ui_elem;
+/* Misc functions*/
 
-typedef void (*OnClickFunc)(struct blank_ui_elem *elem,
-                            Blank_MouseButton mouse_button);
+void blank_wait(i32 miliseconds);
 
+// Blank_Color is the 32 bit rgba color representation
+// used by Blank. The individual color components can be
+// obtained using the corresponding red, green, blue, alpha
+// functions
 typedef u32 Blank_Color;
+
+/* Color functions */
 
 #define blank_color_make(red, green, blue, alpha)                              \
   (Blank_Color)((red) << 24) | ((green) << 16) | ((blue) << 8) | (alpha)
@@ -54,8 +133,6 @@ u8 blank_color_alpha(Blank_Color color);
 #define BLANK_COZY_BLACK blank_color_make(16, 23, 33, 255)
 
 #define BLANK_RED blank_color_make(235, 25, 34, 255)
-
-void blank_wait(i32 miliseconds);
 
 #define BLANK_CLEAR_SCREEN_COMMAND 0
 #define BLANK_RENDER_CUSTOM_COMMAND 1
