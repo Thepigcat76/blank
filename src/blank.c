@@ -1,5 +1,4 @@
 #include <raylib.h>
-#define _POSIX_C_SOURCE 199309L
 #include "../include/blank.h"
 #include "lilc/log.h"
 #include "lilc/numbers.h"

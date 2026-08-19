@@ -28,7 +28,7 @@ struct blank_ui_state {
   bool _window_closed;
   bool _window_resized;
 
-  pthread_mutex_t _mutex;
+  pthread_rwlock_t _mutex;
 };
 
 extern SubmittedUiElements submitted_ui_elems;

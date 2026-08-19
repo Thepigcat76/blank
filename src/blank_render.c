@@ -23,18 +23,18 @@ extern Blank_UiState app_thread_ui_state;
 inline static void blank_set_window_closed(Blank_UiState *ui_state) {
   ASSERT_RENDER_THREAD()
 
-  pthread_mutex_lock(&ui_state->_mutex);
+  pthread_rwlock_wrlock(&ui_state->_mutex);
   ui_state->_window_closed = true;
-  pthread_mutex_unlock(&ui_state->_mutex);
+  pthread_rwlock_unlock(&ui_state->_mutex);
 }
 
 inline static void blank_set_window_resized(Blank_UiState *ui_state,
                                             bool resized) {
   ASSERT_RENDER_THREAD()
 
-  pthread_mutex_lock(&ui_state->_mutex);
+  pthread_rwlock_wrlock(&ui_state->_mutex);
   ui_state->_window_resized = resized;
-  pthread_mutex_unlock(&ui_state->_mutex);
+  pthread_rwlock_unlock(&ui_state->_mutex);
 }
 
 inline static i32 blank_text_width(Blank_Backend *backend, const char *text,
@@ -399,7 +399,7 @@ void *blank_render_thread_run(void *args) {
     Blank_KeyState buttons[_amount_mouse_button] = {0};
     mouse_button_state(&backend, buttons);
 
-    pthread_mutex_lock(&app_thread_ui_state._mutex);
+    pthread_rwlock_wrlock(&app_thread_ui_state._mutex);
     if (hovered_elem != NULL && app_thread_ui_state.clicked_button == -1) {
       app_thread_ui_state.clicked_elem = hovered_elem->elem;
       if (buttons[BLANK_MOUSE_BUTTON_LEFT] == KEY_STATE_RELEASED)
@@ -410,7 +410,7 @@ void *blank_render_thread_run(void *args) {
         app_thread_ui_state.clicked_button = BLANK_MOUSE_BUTTON_MIDDLE;
     }
 
-    pthread_mutex_unlock(&app_thread_ui_state._mutex);
+    pthread_rwlock_unlock(&app_thread_ui_state._mutex);
 
     Rectangle *rect;
     array_foreach(debug_rects, rect) {

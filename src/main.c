@@ -59,12 +59,12 @@ static void app_run(Blank_UiState *state) {
       app_ui_rebuild(&app, state);
     }
 
-    u64 clicked_elem;
-    if (blank_elem_clicked(state, BLANK_MOUSE_BUTTON_RIGHT, &clicked_elem)) {
-      log_debug("elem clicked: %zu", clicked_elem);
-      app.cur_page = (app.cur_page + 1) % 2;
-      app_ui_rebuild(&app, state);
-    }
+    //u64 clicked_elem;
+    //if (blank_elem_clicked(state, BLANK_MOUSE_BUTTON_RIGHT, &clicked_elem)) {
+    //  log_debug("elem clicked: %zu", clicked_elem);
+    //  app.cur_page = (app.cur_page + 1) % 2;
+    //  app_ui_rebuild(&app, state);
+    //}
   }
 }
 

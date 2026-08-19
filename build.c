@@ -39,6 +39,7 @@ static void visit_entry(struct file_entry entry) {
     cmd_appendf(&compile_cmd, "-fno-omit-frame-pointer");
     cmd_appendf(&compile_cmd, "-fsanitize=thread");
     cmd_appendf(&compile_cmd, "-pthread");
+    cmd_appendf(&compile_cmd, "-D_GNU_SOURCE");
   }
   // Output location
   cmd_appendf(&compile_cmd, "-o");

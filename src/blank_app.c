@@ -10,7 +10,7 @@
 #include <pthread.h>
 
 Blank_UiState app_thread_ui_state = {
-    ._mutex = PTHREAD_MUTEX_INITIALIZER,
+    ._mutex = PTHREAD_RWLOCK_INITIALIZER,
     .clicked_button = -1,
 };
 
@@ -28,16 +28,16 @@ void blank_window_resizeable(Blank_InitState *state) {
 }
 
 inline bool blank_window_closed(Blank_UiState *state) {
-  pthread_mutex_lock(&app_thread_ui_state._mutex);
+  pthread_rwlock_rdlock(&app_thread_ui_state._mutex);
   bool closed = app_thread_ui_state._window_closed;
-  pthread_mutex_unlock(&app_thread_ui_state._mutex);
+  pthread_rwlock_unlock(&app_thread_ui_state._mutex);
   return closed;
 }
 
 inline bool blank_window_resized(Blank_UiState *state) {
-  pthread_mutex_lock(&app_thread_ui_state._mutex);
+  pthread_rwlock_rdlock(&app_thread_ui_state._mutex);
   bool resized = app_thread_ui_state._window_resized;
-  pthread_mutex_unlock(&app_thread_ui_state._mutex);
+  pthread_rwlock_unlock(&app_thread_ui_state._mutex);
   return resized;
 }
 
@@ -50,7 +50,7 @@ void blank_ui_begin(Blank_UiState *state, Blank_Color bg_color, Blank_UiLayout i
   submitted_ui_elems.bg_color = bg_color;
   pthread_mutex_unlock(&submitted_ui_elems._mutex);
 
-  pthread_mutex_lock(&app_thread_ui_state._mutex);
+  pthread_rwlock_wrlock(&app_thread_ui_state._mutex);
 
   app_thread_ui_state.ui_layout = initial_layout;
   app_thread_ui_state.building = true;
@@ -76,7 +76,7 @@ void blank_ui_end(void) {
 
   pthread_mutex_unlock(&submitted_ui_elems._mutex);
 
-  pthread_mutex_unlock(&app_thread_ui_state._mutex);
+  pthread_rwlock_unlock(&app_thread_ui_state._mutex);
 }
 
 void blank_ui_group(Blank_UiElemGroup *group, Blank_UiElement elem) {
@@ -96,13 +96,13 @@ void *blank_app_thread_run(void *args) {
 
   Blank_Backend backend = app_thread_args->backend;
 
-  pthread_mutex_lock(&app_thread_ui_state._mutex);
+  pthread_rwlock_wrlock(&app_thread_ui_state._mutex);
 
   app_thread_ui_state._backend = &backend,
   app_thread_ui_state.elements =
       array_new_capacity(Blank_UiElement, 1024, &HEAP_ALLOCATOR),
 
-  pthread_mutex_unlock(&app_thread_ui_state._mutex);
+  pthread_rwlock_unlock(&app_thread_ui_state._mutex);
 
   app_thread_args->app_run_func(&app_thread_ui_state);
 
@@ -195,7 +195,7 @@ Blank_UiElement blank_ui_image(u64 uid, Blank_UiElemImage ui_elem_image) {
 
 bool blank_elem_clicked(Blank_UiState *state, Blank_MouseButton mouse_button,
                         u64 *clicked_elem_uid) {
-  pthread_mutex_lock(&app_thread_ui_state._mutex);
+  pthread_rwlock_wrlock(&app_thread_ui_state._mutex);
   Blank_MouseButton btn = app_thread_ui_state.clicked_button;
 
   if (app_thread_ui_state.clicked_button != -1) {
@@ -206,7 +206,7 @@ bool blank_elem_clicked(Blank_UiState *state, Blank_MouseButton mouse_button,
 
   *clicked_elem_uid = app_thread_ui_state.clicked_elem.uid;
 
-  pthread_mutex_unlock(&app_thread_ui_state._mutex);
+  pthread_rwlock_unlock(&app_thread_ui_state._mutex);
 
   return btn != -1 && btn == mouse_button;
 }
