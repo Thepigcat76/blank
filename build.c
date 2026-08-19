@@ -67,7 +67,29 @@ static void visit_obj_entry(struct file_entry entry) {
   cmd_appendf(&cmd, "%s", entry.path);
 }
 
+static bool module_add(const char *module_directory) {
+  bool success = gurd_build(module_directory, NULL);
+
+  if (success) {
+    char dir_buf[512];
+
+    snprintf(dir_buf, 512, "%s/build", module_directory);
+
+    printf("Collecting module %s\n", dir_buf);
+
+    walk_dir(dir_buf, visit_obj_entry);
+  }
+
+  return success;
+}
+
 int main(int argc, char **argv) {
+  const char *home = getenv("HOME");
+  if (home == NULL) {
+    fprintf(stderr, "HOME is not set\n");
+    return 1;
+  }
+
   size_t backend_arg_idx =
       args_contains_len(argc, argv, "--backend=", strlen("--backend="));
   char *backend = NULL;
@@ -88,7 +110,14 @@ int main(int argc, char **argv) {
   walk_dir("build", visit_obj_entry);
 
   // Libraries
-  cmd_appendf(&cmd, "-l" LIB_LILC);
+  //cmd_appendf(&cmd, "-l" LIB_LILC);
+
+  printf("Adding modules\n");
+
+  // Modules
+  module_add(str_fmt_temp("%s/coding/c/lilc", home));
+
+  printf("Done adding modules\n");
 
   if (backend != NULL && strcmp(backend, "raylib") == 0) {
     cmd_appendf(&cmd, "-l%s", LIB_RAYLIB);
@@ -101,15 +130,15 @@ int main(int argc, char **argv) {
 
   cmd_appendf(&cmd, "-o");
   cmd_appendf(&cmd, OUT_NAME);
-    cmd_appendf(&cmd, "-fsanitize=thread");
-    cmd_appendf(&cmd, "-pthread");
+  cmd_appendf(&cmd, "-fsanitize=thread");
+  cmd_appendf(&cmd, "-pthread");
 
   char s[1024];
   cmd_sprint(&cmd, s);
 
   // Run the command
   cmd_execute(&cmd);
-  
+
   printf("Comamnd: %s\n", s);
 
   bool debug = args_contains(argc, argv, "-d") != -1;
@@ -119,7 +148,9 @@ int main(int argc, char **argv) {
     if (debug) {
       systemf("gdb ./" OUT_NAME);
     } else if (args_contains(argc, argv, "-vg") != -1) {
-      systemf("valgrind --leak-check=full --show-leak-kinds=all --track-origins=yes --errors-for-leak-kinds=all ./%s", OUT_NAME);
+      systemf("valgrind --leak-check=full --show-leak-kinds=all "
+              "--track-origins=yes --errors-for-leak-kinds=all ./%s",
+              OUT_NAME);
     } else {
       systemf("./" OUT_NAME);
     }
