@@ -117,7 +117,7 @@ extern Blank_Size blank_min_size_button(const Blank_UiElement *elem,
 
 void blank_deinit_button(Blank_UiElement *elem) { heap_dealloc(elem->args); }
 
-Blank_UiElement blank_ui_button(u64 uid, Blank_UiElemButton ui_elem_button) {
+Blank_UiElement blank_ui_button(u64 uid, Blank_SizeConfig size_config, Blank_UiElemButton ui_elem_button) {
   if (!app_thread_ui_state.building) {
     panic("Tried constructing a button while not building ui.");
   }
@@ -144,6 +144,7 @@ Blank_UiElement blank_ui_button(u64 uid, Blank_UiElemButton ui_elem_button) {
 
   Blank_UiElement ui_elem = {
       .uid = uid,
+      .size_config = size_config,
       .elem_kind = BLANK_ELEM_BUTTON,
       .args = args,
       .render_func = blank_render_button,

@@ -166,16 +166,28 @@ void blank_render_image_elem(const Blank_RenderableUiElement *render_elem,
 
 Blank_Size blank_min_size_image_elem(const Blank_UiElement *elem,
                                      Blank_Context ctx) {
+  i32 width = 100;
+  i32 height = 100;
+
   Blank_UiElemImage *img = elem->args;
 
   Blank_ImageMetadata metadata = {0};
   bool exists =
       ctx.backend->img_metadata_func(ctx.backend, img->img_path, &metadata);
-  if (exists) {
-    return (Blank_Size){.width = metadata.width * img->scale,
-                        .height = metadata.height * img->scale};
+
+  if (elem->size_config.x_size_kind == BLANK_SIZE_FIXED_ID) {
+    width = elem->size_config.width;
+  } else if (exists) {
+    width = metadata.width * img->scale;
   }
-  return (Blank_Size){.width = 100, .height = 100};
+
+  if (elem->size_config.y_size_kind == BLANK_SIZE_FIXED_ID) {
+    height = elem->size_config.height;
+  } else if (exists) {
+    height = metadata.height * img->scale;
+  }
+
+  return (Blank_Size){.width = width, .height = height};
 }
 
 void blank_deinit_image_elem(Blank_UiElement *elem) {}
@@ -202,9 +214,23 @@ Blank_Size blank_min_size_button(const Blank_UiElement *elem,
   ASSERT_RENDER_THREAD();
 
   Blank_UiElemButton *btn = elem->args;
+
+  i32 width = 0;
+  if (elem->size_config.x_size_kind == BLANK_SIZE_FIXED_ID) {
+    width = elem->size_config.width;
+  } else {
+    width = MeasureText(btn->text, 16) + 16;
+  }
+  i32 height = 0;
+  if (elem->size_config.y_size_kind == BLANK_SIZE_FIXED_ID) {
+    height = elem->size_config.height;
+  } else {
+    height = 16;
+  }
+
   Blank_Size size = {
-      .width = MeasureText(btn->text, 16) + 16,
-      .height = 16,
+      .width = width,
+      .height = height,
   };
 
   return size;
@@ -313,7 +339,7 @@ static void _blank_render_elems(Blank_Backend *backend,
 }
 
 static void mouse_button_state(Blank_Backend *backend,
-                                 Blank_KeyState buttons[_amount_mouse_button]) {
+                               Blank_KeyState buttons[_amount_mouse_button]) {
   backend->mouse_button_state_func(backend, buttons);
 }
 
@@ -439,6 +465,20 @@ void _blank_impl_linear_layout_rearrange_elems(
 
   size_t elems_amount = array_len(*elems);
 
+  size_t x_sizeable_elems_amount = 0;
+  size_t y_sizeable_elems_amount = 0;
+
+  Blank_UiElement *elem;
+  array_foreach(*elems, elem) {
+    if (elem->size_config.x_size_kind == BLANK_SIZE_DYNAMIC_ID) {
+      x_sizeable_elems_amount++;
+    }
+
+    if (elem->size_config.y_size_kind == BLANK_SIZE_DYNAMIC_ID) {
+      y_sizeable_elems_amount++;
+    }
+  }
+
   if (elems_amount == 0)
     return;
 
@@ -475,37 +515,50 @@ void _blank_impl_linear_layout_rearrange_elems(
 
   log_debug("Remainder: width %d, height %d", rem_width, rem_height);
 
-  i32 unsplit_rem_width = rem_width % elems_amount;
-  i32 unsplit_rem_height = rem_height % elems_amount;
+  i32 unsplit_rem_width = rem_width % x_sizeable_elems_amount;
+  i32 unsplit_rem_height = rem_height % y_sizeable_elems_amount;
 
-  i32 extra_width = (rem_width - unsplit_rem_width) / elems_amount;
-  i32 extra_height = (rem_height - unsplit_rem_height) / elems_amount;
+  i32 extra_width = (rem_width - unsplit_rem_width) / x_sizeable_elems_amount;
+  i32 extra_height =
+      (rem_height - unsplit_rem_height) / y_sizeable_elems_amount;
 
   i32 x_offset = context.container_x;
   i32 y_offset = context.container_y;
 
   // Scale every element by the calculated amount
-  Blank_UiElement *elem;
-  array_foreach(*elems, elem) {
-    MinUiElemSizeFunc min_elem_size_func = elem->min_size_func;
-    Blank_Size min_size = min_elem_size_func(elem, ctx);
+  Blank_UiElement *elem1;
+  array_foreach(*elems, elem1) {
+    MinUiElemSizeFunc min_elem_size_func = elem1->min_size_func;
+    Blank_Size min_size = min_elem_size_func(elem1, ctx);
 
     Blank_RenderableUiElement render_elem = {
-        .elem = *elem,
-        .width = min_size.width + extra_width,
-        .height = min_size.height + extra_height,
+        .elem = *elem1,
+        .width = min_size.width,
+        .height = min_size.height,
     };
 
+    if (elem1->size_config.x_size_kind == BLANK_SIZE_DYNAMIC_ID) {
+      render_elem.width += extra_width;
+    }
+
+    if (elem1->size_config.y_size_kind == BLANK_SIZE_DYNAMIC_ID) {
+      render_elem.height += extra_height;
+    }
+
     if (orientation == BLANK_HORIZONTAL) {
-      render_elem.width += unsplit_rem_width > 0 ? 1 : 0;
-      unsplit_rem_width -= 1;
+      if (elem1->size_config.x_size_kind == BLANK_SIZE_DYNAMIC_ID) {
+        render_elem.width += unsplit_rem_width > 0 ? 1 : 0;
+        unsplit_rem_width -= 1;
+      }
       render_elem.height = max(render_elem.height, context.container_height);
     }
 
     if (orientation == BLANK_VERTICAL) {
+      if (elem1->size_config.y_size_kind == BLANK_SIZE_DYNAMIC_ID) {
+        render_elem.height += unsplit_rem_height > 0 ? 1 : 0;
+        unsplit_rem_height -= 1;
+      }
       render_elem.width = max(render_elem.width, context.container_width);
-      render_elem.height += unsplit_rem_height > 0 ? 1 : 0;
-      unsplit_rem_height -= 1;
     }
 
     render_elem.x = x_offset;

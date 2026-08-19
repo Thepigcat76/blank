@@ -37,9 +37,9 @@ Blank_UiElement blank_ui_image(u64 uid, Blank_UiElemImage ui_elem_image);
 
 #define BLANK_IMAGE(uid, ...) blank_ui_image(uid, (Blank_UiElemImage){__VA_ARGS__})
 
-Blank_UiElement blank_ui_button(u64 uid, Blank_UiElemButton ui_elem_button);
+Blank_UiElement blank_ui_button(u64 uid, Blank_SizeConfig size_config, Blank_UiElemButton ui_elem_button);
 
-#define BLANK_BUTTON(uid, ...) blank_ui_button(uid, (Blank_UiElemButton){__VA_ARGS__})
+#define BLANK_BUTTON(uid, x_size_kind, y_size_kind, ...) blank_ui_button(uid, (Blank_SizeConfig){x_size_kind, y_size_kind}, (Blank_UiElemButton){__VA_ARGS__})
 
 Blank_UiElement blank_button(const char *text, bool disabled);
 

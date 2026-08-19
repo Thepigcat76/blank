@@ -20,30 +20,74 @@ typedef enum {
 typedef enum {
   BLANK_KEY_NULL,
   // Letters
-  BLANK_KEY_A, BLANK_KEY_B, BLANK_KEY_C, BLANK_KEY_D, BLANK_KEY_E,
-  BLANK_KEY_F, BLANK_KEY_G, BLANK_KEY_H, BLANK_KEY_I, BLANK_KEY_J,
-  BLANK_KEY_K, BLANK_KEY_L, BLANK_KEY_M, BLANK_KEY_N, BLANK_KEY_O,
-  BLANK_KEY_P, BLANK_KEY_Q, BLANK_KEY_R, BLANK_KEY_S, BLANK_KEY_T,
-  BLANK_KEY_U, BLANK_KEY_V, BLANK_KEY_W, BLANK_KEY_X, BLANK_KEY_Y,
+  BLANK_KEY_A,
+  BLANK_KEY_B,
+  BLANK_KEY_C,
+  BLANK_KEY_D,
+  BLANK_KEY_E,
+  BLANK_KEY_F,
+  BLANK_KEY_G,
+  BLANK_KEY_H,
+  BLANK_KEY_I,
+  BLANK_KEY_J,
+  BLANK_KEY_K,
+  BLANK_KEY_L,
+  BLANK_KEY_M,
+  BLANK_KEY_N,
+  BLANK_KEY_O,
+  BLANK_KEY_P,
+  BLANK_KEY_Q,
+  BLANK_KEY_R,
+  BLANK_KEY_S,
+  BLANK_KEY_T,
+  BLANK_KEY_U,
+  BLANK_KEY_V,
+  BLANK_KEY_W,
+  BLANK_KEY_X,
+  BLANK_KEY_Y,
   BLANK_KEY_Z,
 
   // Numbers (top row)
-  BLANK_KEY_0, BLANK_KEY_1, BLANK_KEY_2, BLANK_KEY_3, BLANK_KEY_4,
-  BLANK_KEY_5, BLANK_KEY_6, BLANK_KEY_7, BLANK_KEY_8, BLANK_KEY_9,
+  BLANK_KEY_0,
+  BLANK_KEY_1,
+  BLANK_KEY_2,
+  BLANK_KEY_3,
+  BLANK_KEY_4,
+  BLANK_KEY_5,
+  BLANK_KEY_6,
+  BLANK_KEY_7,
+  BLANK_KEY_8,
+  BLANK_KEY_9,
 
   // Function keys
-  BLANK_KEY_F1,  BLANK_KEY_F2,  BLANK_KEY_F3,  BLANK_KEY_F4,
-  BLANK_KEY_F5,  BLANK_KEY_F6,  BLANK_KEY_F7,  BLANK_KEY_F8,
-  BLANK_KEY_F9,  BLANK_KEY_F10, BLANK_KEY_F11, BLANK_KEY_F12,
+  BLANK_KEY_F1,
+  BLANK_KEY_F2,
+  BLANK_KEY_F3,
+  BLANK_KEY_F4,
+  BLANK_KEY_F5,
+  BLANK_KEY_F6,
+  BLANK_KEY_F7,
+  BLANK_KEY_F8,
+  BLANK_KEY_F9,
+  BLANK_KEY_F10,
+  BLANK_KEY_F11,
+  BLANK_KEY_F12,
 
   // Arrow keys
-  BLANK_KEY_UP, BLANK_KEY_DOWN, BLANK_KEY_LEFT, BLANK_KEY_RIGHT,
+  BLANK_KEY_UP,
+  BLANK_KEY_DOWN,
+  BLANK_KEY_LEFT,
+  BLANK_KEY_RIGHT,
 
   // Modifier keys
-  BLANK_KEY_LEFT_SHIFT,  BLANK_KEY_RIGHT_SHIFT,
-  BLANK_KEY_LEFT_CTRL,   BLANK_KEY_RIGHT_CTRL,
-  BLANK_KEY_LEFT_ALT,    BLANK_KEY_RIGHT_ALT,
-  BLANK_KEY_LEFT_SUPER,  BLANK_KEY_RIGHT_SUPER,
+  BLANK_KEY_LEFT_SHIFT,
+  BLANK_KEY_RIGHT_SHIFT,
+  BLANK_KEY_LEFT_CTRL,
+  BLANK_KEY_RIGHT_CTRL,
+  BLANK_KEY_LEFT_ALT,
+  BLANK_KEY_RIGHT_ALT,
+  BLANK_KEY_LEFT_SUPER,
+  BLANK_KEY_RIGHT_SUPER,
 
   // Control keys
   BLANK_KEY_ESCAPE,
@@ -77,9 +121,15 @@ typedef enum {
 
   // Numpad
   BLANK_KEY_NUM_LOCK,
-  BLANK_KEY_NUMPAD_0, BLANK_KEY_NUMPAD_1, BLANK_KEY_NUMPAD_2,
-  BLANK_KEY_NUMPAD_3, BLANK_KEY_NUMPAD_4, BLANK_KEY_NUMPAD_5,
-  BLANK_KEY_NUMPAD_6, BLANK_KEY_NUMPAD_7, BLANK_KEY_NUMPAD_8,
+  BLANK_KEY_NUMPAD_0,
+  BLANK_KEY_NUMPAD_1,
+  BLANK_KEY_NUMPAD_2,
+  BLANK_KEY_NUMPAD_3,
+  BLANK_KEY_NUMPAD_4,
+  BLANK_KEY_NUMPAD_5,
+  BLANK_KEY_NUMPAD_6,
+  BLANK_KEY_NUMPAD_7,
+  BLANK_KEY_NUMPAD_8,
   BLANK_KEY_NUMPAD_9,
   BLANK_KEY_NUMPAD_ADD,
   BLANK_KEY_NUMPAD_SUBTRACT,
@@ -100,6 +150,9 @@ typedef struct {
   i32 width;
   i32 height;
 } Blank_Size;
+
+#define BLANK_SIZE(width, height)                                              \
+  (Blank_Size) { .width = width, .height = height }
 
 /* Misc functions*/
 
@@ -164,11 +217,11 @@ struct blank_cmd_render_rectangle {
 
 struct blank_cmd_render_img {
   const char *img_path;
-  
+
   Blank_Color tint_color;
   i32 x;
   i32 y;
-  
+
   i32 width;
   i32 height;
 };
@@ -192,16 +245,33 @@ typedef struct {
   Blank_Backend *backend;
 } Blank_Context;
 
-typedef Blank_Size (*MinUiElemSizeFunc)(const struct blank_ui_elem *elem, Blank_Context ctx);
+typedef Blank_Size (*MinUiElemSizeFunc)(const struct blank_ui_elem *elem,
+                                        Blank_Context ctx);
 
 typedef void (*RenderUiElemFunc)(const struct blank_render_ui_elem *elem,
                                  Blank_RenderContext render_ctx);
 
 typedef void (*DeinitUiElemFunc)(struct blank_ui_elem *elem);
 
+#define BLANK_SIZE_DYNAMIC 0, -1
+#define BLANK_SIZE_FIXED(size) 1, size
+#define BLANK_SIZE_MIN 2, -1
+
+typedef struct {
+  u8 x_size_kind;
+  i32 width;
+  u8 y_size_kind;
+  i32 height;
+} Blank_SizeConfig;
+
+#define BLANK_SIZES(x_size_kind, y_size_kind, ...)                             \
+  (BlankSizeConfig)
+
 typedef struct blank_ui_elem {
   // Unique identifier that can be used to identify and group elements
   u64 uid;
+
+  Blank_SizeConfig size_config;
 
   size_t elem_kind;
   void *args;
@@ -243,7 +313,8 @@ typedef void (*LayoutRearrangeElemsFunc)(
     Blank_RenderableUiElement **renderable_elems, Blank_LayoutContext context);
 
 typedef Blank_Size (*LayoutMinSizeElemsFunc)(
-    const struct blank_ui_layout *layout, Blank_UiElement *elems, Blank_Context ctx);
+    const struct blank_ui_layout *layout, Blank_UiElement *elems,
+    Blank_Context ctx);
 
 typedef struct blank_ui_layout {
   LayoutRearrangeElemsFunc rearrange_elems_func;
@@ -301,7 +372,8 @@ bool blank_elem_clicked(Blank_UiState *state, Blank_MouseButton mouse_button,
 
 /* UI-Building functions */
 
-void blank_ui_begin(Blank_UiState *state, Blank_Color bg_color, Blank_UiLayout initial_layout);
+void blank_ui_begin(Blank_UiState *state, Blank_Color bg_color,
+                    Blank_UiLayout initial_layout);
 
 void blank_ui_end(void);
 

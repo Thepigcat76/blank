@@ -46,3 +46,7 @@ struct app_thread_args {
   Blank_Backend backend;
   AppRunFunc app_run_func;
 };
+
+#define BLANK_SIZE_DYNAMIC_ID 0
+#define BLANK_SIZE_FIXED_ID 1
+#define BLANK_SIZE_MIN_ID 2
